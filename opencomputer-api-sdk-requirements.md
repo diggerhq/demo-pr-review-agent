@@ -60,6 +60,8 @@ The SDK types expose `secret` for `session.destinations.create({ secret })`, but
 
 ## Repository Checkout / Workspace Sources
 
+See [private-repo-checkout-options.md](private-repo-checkout-options.md) for the fuller problem statement, threat model, and solution comparison.
+
 The Durable Agent Sessions runtime has hands-sandbox tools such as `use_repo`, `bash`, `read`, `write`, and `ls`, so a public GitHub repository can be checked out by prompt today. For a GitHub App PR reviewer, the harder production requirement is private repository checkout without exposing installation tokens to prompt text, event logs, or the model.
 
 GitHub's current private-repo primitive for this flow is a GitHub App installation access token. The webhook payload includes the installation ID; the app signs a GitHub App JWT, calls `POST /app/installations/{installation_id}/access_tokens`, and can narrow the returned token to specific `repository_ids` and permissions. The token expires after one hour, can be used as the password for HTTPS Git access when the app has `contents: read`, and can be revoked when no longer needed.
