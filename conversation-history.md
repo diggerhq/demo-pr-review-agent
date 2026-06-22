@@ -59,3 +59,7 @@ I chose Fly.io because this app is a normal long-running Node HTTP webhook servi
 > User: "ok good; dont forget to keep capturing notes (conversation, DX) and commit push frequently"
 
 I acknowledged the checkpoint cadence and updated this log before committing the Fly deployment configuration.
+
+> User: "can you make a github app via api or gh cli or some manifest or smth? also dont forget to keep capturing notes and pushing frequently"
+
+I checked `gh` and current GitHub App Manifest docs. The installed `gh` CLI has no `gh app` command, and the documented GitHub App Manifest flow still requires a browser approval step, but it can prefill the app registration. I added `/setup/github-app`, `/setup/github-app/manifest`, and `/setup/github-app/callback` so the deployed service can generate a preconfigured GitHub App manifest and guide the credential handoff.

@@ -127,11 +127,13 @@ Once deployed, the public URL is:
 https://oc-pr-review-agent-digger-test0.fly.dev
 ```
 
-Configure the GitHub App webhook URL as:
+Use the deployed setup page to create a preconfigured GitHub App:
 
 ```text
-https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github
+https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app
 ```
+
+This sends a GitHub App manifest with the required webhook URL, permissions, and events. GitHub redirects back with a temporary manifest code; exchange it within one hour to retrieve the app ID, private key, and webhook secret, then set those as Fly secrets.
 
 ### Docker
 
@@ -157,6 +159,7 @@ Set all required secrets in the host dashboard, then configure the GitHub App we
 - OpenComputer sessions are durable, but this first service does not yet persist a queue that can resume unfinished jobs after process restart.
 - The sticky PR comment contains the OpenComputer session ID but not the session client token.
 - The review comment is intentionally Markdown-only for now. Checks annotations and line comments are future improvements.
+- GitHub App setup can start from `/setup/github-app`, which posts a preconfigured GitHub App manifest to GitHub.
 
 ## Verification
 
