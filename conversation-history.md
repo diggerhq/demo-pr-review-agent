@@ -199,3 +199,11 @@ I upgraded the repo to `@opencomputer/sdk@0.7.2`, confirmed the new declarations
 > User: "i wonder what actually in the current code requires an always-on container? wouldn't we be better off deploying to smth lightweight / serverless to demonstrate the point that this is almost frontend, no backend complexity? or is there smth that genuinely requires an always-on app?"
 
 I reviewed the current request flow and identified that the app no longer needs an always-on container for state, polling, or local storage. The remaining always-on assumption is the use of `setImmediate(...)` after returning `202` to GitHub; that deferred pre-session work needs a live process or a serverless background primitive such as `waitUntil`. A serverless deployment would better demonstrate that OpenComputer owns the durable background-agent work, while the app only handles webhooks and GitHub API calls.
+
+> User: "how will the setimmediate replacement work on CF workers? and crypto?"
+
+I explained that Cloudflare Workers would replace `setImmediate(...)` with `ctx.waitUntil(promise)` or imported `waitUntil`, while crypto could either use the `nodejs_compat` flag to keep the current `node:crypto` code or be rewritten to Web Crypto. I noted that `waitUntil` is suitable for short post-response handoff work, not a durable queue.
+
+> User: "also, how long does this async part actually take? since it is an example i wonder if we can just await and call it a day lol :) but need your guidance here"
+
+I checked the deployed logs and found the current pre-session work is usually only a few seconds. The latest verified run took about 4 seconds from review start to OpenComputer session creation and about 6 seconds before the app was only waiting for the OpenComputer callback, which makes awaiting it plausible for an example if we keep GitHub's webhook timeout in mind.
