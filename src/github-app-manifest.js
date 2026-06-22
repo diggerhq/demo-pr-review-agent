@@ -18,7 +18,7 @@ export function buildGitHubAppManifest({ publicUrl, webhookPath }) {
     request_oauth_on_install: false,
     default_permissions: {
       contents: "read",
-      pull_requests: "read",
+      pull_requests: "write",
       issues: "write",
     },
     default_events: ["pull_request", "issue_comment"],

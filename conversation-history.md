@@ -109,3 +109,5 @@ I changed [src/review.js](src/review.js) so accepted reviews post a sticky `queu
 > User: "dont forget to push to the repo frequently with conversation logs and DX notes on opencomputer"
 
 I treated the progress-comment/debugging change as a checkpoint and prepared to commit and push the code plus tracking-doc updates before redeploying.
+
+After deploying the progress-comment change, I attempted to trigger `/oc-review` through the GitHub App installation token. GitHub returned `403 Resource not accessible by integration` when creating an issue comment, even though the app had `Issues: write`. The `X-Accepted-GitHub-Permissions` header included `issues=write; pull_requests=write`, and the token had `pull_requests=read`, so the app needs Pull requests write permission for PR conversation comments. I updated the manifest and README accordingly; the existing GitHub App installation still needs that permission approved in GitHub.

@@ -49,6 +49,8 @@ Expected behavior:
 - The comment first says the review is running.
 - The comment updates with the OpenComputer review result when the durable session completes.
 
+The GitHub App must have **Pull requests: read and write**. GitHub can reject PR conversation comments with `403 Resource not accessible by integration` when the app has `Issues: write` but only `Pull requests: read`.
+
 You can also trigger a review by pushing a new commit to the PR, which sends `pull_request.synchronize`.
 
 If no PR comment appears, check GitHub App delivery logs first:
@@ -113,7 +115,7 @@ Create a GitHub App with:
 - Webhook secret: a high-entropy random value
 - Repository permissions:
   - Contents: read
-  - Pull requests: read
+  - Pull requests: write
   - Issues: write
   - Metadata: read, added by GitHub automatically
 - Subscribe to events:

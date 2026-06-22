@@ -10,7 +10,7 @@ test("buildGitHubAppManifest creates the PR reviewer GitHub App manifest", () =>
 
   assert.equal(manifest.hook_attributes.url, "https://agent.example.com/webhooks/github");
   assert.equal(manifest.default_permissions.contents, "read");
-  assert.equal(manifest.default_permissions.pull_requests, "read");
+  assert.equal(manifest.default_permissions.pull_requests, "write");
   assert.equal(manifest.default_permissions.issues, "write");
   assert.deepEqual(manifest.default_events, ["pull_request", "issue_comment"]);
 });
