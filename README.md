@@ -231,11 +231,12 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 - For simplicity, the GitHub webhook handler awaits only the setup work needed to create the OpenComputer session and post the running comment. If that setup can approach GitHub's webhook timeout in production, move it behind a queue or serverless `waitUntil` equivalent.
 - `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts. See the OpenComputer [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
-- The task asks the agent to check out public repositories in the hands sandbox and use the diff as fallback context. Private-repo checkout needs a first-class OpenComputer source/workspace or secret handoff so GitHub installation tokens never become model-visible prompt text. See [private-repo-checkout-options.md](private-repo-checkout-options.md).
+- The task asks the agent to check out public repositories in the hands sandbox and use the diff as fallback context. Private-repo checkout needs a first-class OpenComputer source/workspace or secret handoff so GitHub installation tokens never become model-visible prompt text. See [.agents/private-repo-checkout-options.md](.agents/private-repo-checkout-options.md).
 
 ## Tracking Docs
 
-- [conversation-history.md](conversation-history.md) records user prompts and assistant response summaries.
-- [opencomputer-dx-notes.md](opencomputer-dx-notes.md) records API and developer-experience observations from this build.
-- [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md) captures concrete API/SDK changes suggested by this example.
-- [private-repo-checkout-options.md](private-repo-checkout-options.md) captures the private-repository checkout problem and solution options.
+- [AGENTS.md](AGENTS.md) is the entry point for future agents working in this repo.
+- [.agents/conversation-history.md](.agents/conversation-history.md) records user prompts and assistant response summaries.
+- [.agents/opencomputer-dx-notes.md](.agents/opencomputer-dx-notes.md) records API and developer-experience observations from this build.
+- [.agents/opencomputer-api-sdk-requirements.md](.agents/opencomputer-api-sdk-requirements.md) captures concrete API/SDK changes suggested by this example.
+- [.agents/private-repo-checkout-options.md](.agents/private-repo-checkout-options.md) captures the private-repository checkout problem and solution options.
