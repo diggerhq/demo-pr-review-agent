@@ -215,3 +215,25 @@ I confirmed that this is the right boundary: the app can await the short setup w
 > User: "good! now, are we moving to CF worker?"
 
 I recommended moving to Cloudflare Workers as the next architecture step, now that the app no longer depends on an always-on process for post-response work. The migration should keep the OpenComputer durable-session callback design, use a Worker entrypoint instead of the Node server, start with Cloudflare `nodejs_compat` for the existing `node:crypto`/`Buffer` code, and move to Web Crypto later if we want a more edge-native example.
+
+> User: "what'd be the best way to move it to worker but with no or minimal tying to CF-specific apis?"
+
+I recommended a thin-adapter approach: keep the application core in Fetch/Hono routes with injected config, add only a small Cloudflare Worker entrypoint that reads `env` and calls the shared runtime, avoid KV/Durable Objects/Queues/`waitUntil`, and use `nodejs_compat` first for the existing GitHub App crypto. I also logged a DX note that OpenComputer examples should keep host code runtime-neutral so Durable Agent Sessions are clearly the durable backend.
+
+> User: "good plan lets do this"
+
+I split shared app construction into [src/runtime.ts](src/runtime.ts), added a thin [src/worker.ts](src/worker.ts), introduced [wrangler.toml](wrangler.toml), added Wrangler scripts, and kept the first pass free of Cloudflare storage or background APIs. I verified `npm run lint`, `npm test`, `npm run build`, and a Wrangler dry run, then pushed [`652d894`](https://github.com/diggerhq/test-durable-0/commit/652d894).
+
+> User: "ok wrong CF account - pls make sure to use mo@digger.dev (not mixflow)"
+
+> User: "i have access to 2 orgs I think, need to use Mo's acct"
+
+I corrected the deployment target from the default Igor/mixflow Cloudflare account to Mo's Cloudflare account, copied only selected secrets from the ignored local `.env`, deployed the Worker under Mo's account, verified `/healthz`, updated the GitHub App webhook URL to the Mo Worker, and deleted the accidental mixflow Worker so its copied secrets were removed.
+
+> User: "can we have a shorter worker name plz, too long, we'll have many links in readme etc?"
+
+I renamed the Worker to `oc-pr-review`, deployed it under Mo's account at `https://oc-pr-review.mo-b8f.workers.dev`, verified health, updated the GitHub App webhook URL to `https://oc-pr-review.mo-b8f.workers.dev/webhooks/github`, and deleted the longer Mo Worker.
+
+> User: "also dont forget to remove docker and fly etc and update relevant pieces of readme. worth underscoring that webhook metadata allows the app to be fully serverless - all statefulness handled by opencomputer"
+
+I removed the old container/Node deployment surface: `Dockerfile`, `.dockerignore`, `fly.toml`, `src/server.ts`, the `@hono/node-server` dependency, `PORT`, and the Node `start` script. I updated [README.md](README.md) so Cloudflare Workers is the only runtime path and explicitly explains that OpenComputer session `metadata` carries callback routing state, making the app fully serverless with no local database, queue, or in-memory job state. I also updated [opencomputer-dx-notes.md](opencomputer-dx-notes.md), pushed [`6160ab1`](https://github.com/diggerhq/test-durable-0/commit/6160ab1), deployed Worker version `024d54bc-5504-416e-b404-83fb5f2751d1`, and verified both `/healthz` and the GitHub App webhook URL.
