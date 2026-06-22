@@ -241,3 +241,7 @@ I removed the old container/Node deployment surface: `Dockerfile`, `.dockerignor
 > User: "readme should link to oc durable sessions docs somewhere at the top and also throughout the readme where appropriate"
 
 I verified the current OpenComputer Durable Agent Sessions docs URLs from the official docs index and checked that the browser pages return `200`. I updated [README.md](README.md) so the intro links to Durable Agent Sessions, the live-demo block links to the overview/sessions/webhooks/API reference, and the architecture/prod-notes sections link to the relevant sessions, webhooks, agents, and API/SDK docs where the code uses those concepts.
+
+> User: "want to rename the repo to be more descriptive - its a demo repo now, idk demo-pr-review-agent or smth like that. ideally keeping the old link intact"
+
+I renamed the GitHub repository from `diggerhq/test-durable-0` to `diggerhq/demo-pr-review-agent`, updated the local `origin` remote, set the GitHub repo description, and verified authenticated access through both the new slug and the old slug. GitHub keeps old repository web/git links redirecting after a rename as long as the old name is not reused. I updated [README.md](README.md), [package.json](package.json), and [package-lock.json](package-lock.json) for the new repo name and pushed [`952457e`](https://github.com/diggerhq/demo-pr-review-agent/commit/952457e).
