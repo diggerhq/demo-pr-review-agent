@@ -6,7 +6,7 @@ Live demo:
 
 - App: [oc-pr-review.mo-b8f.workers.dev](https://oc-pr-review.mo-b8f.workers.dev)
 - GitHub App: [0x Test PR Reviewer](https://github.com/apps/0x-test-pr-reviewer)
-- Verified demo PR: [diggerhq/test-durable-0#3](https://github.com/diggerhq/test-durable-0/pull/3)
+- Verified demo PR: [diggerhq/demo-pr-review-agent#3](https://github.com/diggerhq/demo-pr-review-agent/pull/3)
 - Docs: [Durable Agent Sessions](https://docs.opencomputer.dev/agent-sessions/overview), [sessions](https://docs.opencomputer.dev/agent-sessions/sessions), [webhooks](https://docs.opencomputer.dev/agent-sessions/webhooks), and [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference)
 
 ## Test The Live App
