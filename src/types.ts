@@ -1,7 +1,6 @@
 import type { Limits, OpenComputer, Session } from "@opencomputer/sdk";
 import type { Hono } from "hono";
 import type { GitHubAppClient } from "./github.js";
-import type { JsonlStore } from "./store.js";
 
 export interface AppConfig {
   port: number;
@@ -31,8 +30,6 @@ export interface AppConfig {
     commandPrefix: string;
     includeDrafts: boolean;
     maxDiffChars: number;
-    waitTimeoutMs: number;
-    pollIntervalMs: number;
     commentMaxChars: number;
   };
 }
@@ -96,7 +93,6 @@ export interface ReviewServiceDeps {
   config: AppConfig;
   github: GitHubAppClient;
   openComputer: OpenComputer;
-  store: JsonlStore;
 }
 
 export interface Runtime {
@@ -105,11 +101,3 @@ export interface Runtime {
 }
 
 export type OpenComputerSession = Session;
-
-export interface ReviewState {
-  sessionId: string;
-  installationId: number;
-  repository: GitHubRepository;
-  pullRequest: GitHubPullRequest;
-  trigger: string;
-}

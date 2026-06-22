@@ -71,8 +71,6 @@ export function loadConfig(env: Env = process.env): AppConfig {
       commandPrefix: env.REVIEW_COMMAND_PREFIX || "/oc-review",
       includeDrafts: bool(env.REVIEW_DRAFT_PRS, false),
       maxDiffChars: integer(env.REVIEW_MAX_DIFF_CHARS, 60000),
-      waitTimeoutMs: integer(env.REVIEW_WAIT_TIMEOUT_MS, 20 * 60 * 1000),
-      pollIntervalMs: integer(env.REVIEW_POLL_INTERVAL_MS, 5000),
       commentMaxChars: integer(env.REVIEW_COMMENT_MAX_CHARS, 62000),
     },
   };

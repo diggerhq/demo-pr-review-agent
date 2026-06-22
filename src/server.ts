@@ -3,7 +3,6 @@ import { OpenComputer } from "@opencomputer/sdk";
 import { loadConfig, missingRequiredConfig, webhookUrl } from "./config.js";
 import { createApp } from "./app.js";
 import { GitHubAppClient } from "./github.js";
-import { JsonlStore } from "./store.js";
 import { ReviewService } from "./review.js";
 import type { AppConfig } from "./types.js";
 
@@ -17,7 +16,6 @@ export function createRuntime(config: AppConfig): { app: ReturnType<typeof creat
     config,
     github,
     openComputer,
-    store: new JsonlStore(),
   });
 
   return {

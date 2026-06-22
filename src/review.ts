@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Session } from "@opencomputer/sdk";
-import { REVIEW_AGENT_PROMPT, buildReviewTask, limitCommentBody } from "./prompts.js";
+import { buildReviewTask, limitCommentBody } from "./prompts.js";
 import type {
   GitHubPullRequest,
   GitHubRepository,
@@ -10,6 +11,7 @@ import type {
 export const REVIEW_COMMENT_MARKER = "<!-- opencomputer-pr-review -->";
 
 const PULL_REQUEST_ACTIONS = new Set(["opened", "reopened", "synchronize", "ready_for_review"]);
+const REVIEW_SESSION_KEY_PREFIX = "github-pr:v1";
 
 type SessionResult = Awaited<ReturnType<Session["result"]>>;
 
@@ -32,6 +34,14 @@ interface QueuedReviewJob {
   trigger: string;
   manualInstruction?: string;
   installationToken?: string;
+}
+
+interface ReviewSessionRoute {
+  owner: string;
+  repo: string;
+  pullNumber: number;
+  headSha: string;
+  delivery: string;
 }
 
 interface ManualReviewJob {
@@ -76,8 +86,72 @@ function shortSha(sha = ""): string {
   return sha ? sha.slice(0, 12) : "unknown";
 }
 
-function sessionKey(repository: GitHubRepository, pullRequest: GitHubPullRequest): string {
-  return `github:${repository.full_name}:pull:${pullRequest.number}:sha:${pullRequest.head?.sha}`;
+function keyPart(value: string | number | undefined): string {
+  return encodeURIComponent(String(value || ""));
+}
+
+function decodeKeyPart(value: string | undefined): string | null {
+  try {
+    return decodeURIComponent(value || "");
+  } catch {
+    return null;
+  }
+}
+
+export function reviewSessionKey({
+  delivery,
+  repository,
+  pullRequest,
+}: Pick<QueuedReviewJob, "delivery" | "repository" | "pullRequest">): string {
+  const route: ReviewSessionRoute = {
+    owner: repository.owner.login,
+    repo: repository.name,
+    pullNumber: pullRequest.number,
+    headSha: pullRequest.head?.sha || "",
+    delivery: delivery || `local-${randomUUID()}`,
+  };
+
+  return [
+    REVIEW_SESSION_KEY_PREFIX,
+    keyPart(route.owner),
+    keyPart(route.repo),
+    keyPart(route.pullNumber),
+    keyPart(route.headSha),
+    keyPart(route.delivery),
+  ].join(":");
+}
+
+export function parseReviewSessionKey(key: string | undefined): ReviewSessionRoute | null {
+  if (!key) {
+    return null;
+  }
+
+  const [namespace, version, owner, repo, pullNumber, headSha, delivery] = key.split(":");
+  if (`${namespace}:${version}` !== REVIEW_SESSION_KEY_PREFIX) {
+    return null;
+  }
+
+  const decodedPullNumber = decodeKeyPart(pullNumber);
+  const parsedPullNumber = Number.parseInt(decodedPullNumber || "", 10);
+  if (!Number.isInteger(parsedPullNumber) || parsedPullNumber <= 0) {
+    return null;
+  }
+
+  const decodedOwner = decodeKeyPart(owner);
+  const decodedRepo = decodeKeyPart(repo);
+  const decodedHeadSha = decodeKeyPart(headSha);
+  const decodedDelivery = decodeKeyPart(delivery);
+  if (!decodedOwner || !decodedRepo || decodedHeadSha === null || decodedDelivery === null) {
+    return null;
+  }
+
+  return {
+    owner: decodedOwner,
+    repo: decodedRepo,
+    pullNumber: parsedPullNumber,
+    headSha: decodedHeadSha,
+    delivery: decodedDelivery,
+  };
 }
 
 function openComputerCallbackUrl(config: ReviewServiceDeps["config"]): string {
@@ -280,12 +354,10 @@ export class ReviewService {
   config: ReviewServiceDeps["config"];
   github: ReviewServiceDeps["github"];
   openComputer: ReviewServiceDeps["openComputer"];
-  store: ReviewServiceDeps["store"];
-  constructor({ config, github, openComputer, store }: ReviewServiceDeps) {
+  constructor({ config, github, openComputer }: ReviewServiceDeps) {
     this.config = config;
     this.github = github;
     this.openComputer = openComputer;
-    this.store = store;
   }
 
   handleWebhook({ event, delivery, payload }: WebhookContext): { accepted: boolean; reason: string } {
@@ -416,14 +488,6 @@ export class ReviewService {
     const pullNumber = pullRequest.number;
     let token = installationToken;
 
-    await this.store.append({
-      event: "review.started",
-      delivery,
-      trigger,
-      repository: repository.full_name,
-      pullNumber,
-      headSha: pullRequest.head?.sha,
-    });
     console.info("review started", {
       delivery,
       trigger,
@@ -504,7 +568,7 @@ export class ReviewService {
       const session = await this.openComputer.sessions.create({
         agent: agentId,
         input,
-        key: sessionKey(repository, pullRequest),
+        key: reviewSessionKey({ delivery, repository, pullRequest }),
         limits: this.config.openComputer.limits,
         idempotencyKey: delivery,
         destinations: [
@@ -518,16 +582,6 @@ export class ReviewService {
         ],
       });
       const sessionId = session.id;
-      if (!installationId) {
-        throw new Error("GitHub webhook payload did not include an installation id");
-      }
-      await this.store.saveReviewState({
-        sessionId,
-        installationId,
-        repository,
-        pullRequest,
-        trigger,
-      });
       console.info("review opencomputer session created", {
         delivery,
         repository: repository.full_name,
@@ -543,15 +597,8 @@ export class ReviewService {
         marker: REVIEW_COMMENT_MARKER,
         body: runningComment({ repository, pullRequest, sessionId, trigger }),
       });
+      await this.completeReviewFromSession(sessionId);
 
-      await this.store.append({
-        event: "review.session_created",
-        delivery,
-        repository: repository.full_name,
-        pullNumber,
-        headSha: pullRequest.head?.sha,
-        sessionId,
-      });
       console.info("review waiting for opencomputer webhook", {
         delivery,
         repository: repository.full_name,
@@ -563,15 +610,6 @@ export class ReviewService {
         delivery,
         repository: repository.full_name,
         pullNumber,
-        error: errorRecord(error),
-      });
-
-      await this.store.append({
-        event: "review.failed",
-        delivery,
-        repository: repository.full_name,
-        pullNumber,
-        headSha: pullRequest.head?.sha,
         error: errorRecord(error),
       });
 
@@ -611,22 +649,50 @@ export class ReviewService {
   }
 
   async completeReviewFromSession(sessionId: string): Promise<{ accepted: boolean; reason: string }> {
-    const state = await this.store.getReviewState(sessionId);
-    if (!state) {
-      return { accepted: false, reason: `ignored unknown OpenComputer session ${sessionId}` };
+    const session = await this.openComputer.sessions.get(sessionId);
+    const route = parseReviewSessionKey(session.snapshot.key);
+    if (!route) {
+      return { accepted: false, reason: `ignored OpenComputer session ${sessionId} without review routing key` };
     }
 
-    const session = await this.openComputer.sessions.get(sessionId);
     const result = await session.result();
     const yieldReason = result.lastTurn?.yieldReason;
     if (!yieldReason) {
       return { accepted: true, reason: `OpenComputer session ${sessionId} is not complete yet` };
     }
 
-    const token = await this.github.installationToken(state.installationId);
-    const owner = state.repository.owner.login;
-    const repo = state.repository.name;
-    const pullNumber = state.pullRequest.number;
+    const { owner, repo, pullNumber } = route;
+    const repository: GitHubRepository = {
+      name: repo,
+      full_name: `${owner}/${repo}`,
+      owner: { login: owner },
+    };
+    const token = await this.github.installationTokenForRepository({ owner, repo });
+    const pullRequest = await this.github.getPullRequest({ token, owner, repo, pullNumber });
+    if (route.headSha && pullRequest.head?.sha && route.headSha !== pullRequest.head.sha) {
+      console.info("ignored stale opencomputer review", {
+        repository: repository.full_name,
+        pullNumber,
+        sessionId,
+        sessionHeadSha: route.headSha,
+        currentHeadSha: pullRequest.head.sha,
+      });
+
+      return { accepted: true, reason: "ignored stale pull request review" };
+    }
+
+    const comments = await this.github.listIssueComments({ token, owner, repo, issueNumber: pullNumber });
+    const stickyComment = [...comments].reverse().find((comment) => comment.body?.includes(REVIEW_COMMENT_MARKER));
+    if (stickyComment?.body?.includes("- Session: `") && !stickyComment.body.includes(`- Session: \`${sessionId}\``)) {
+      console.info("ignored superseded opencomputer review", {
+        repository: repository.full_name,
+        pullNumber,
+        sessionId,
+      });
+
+      return { accepted: true, reason: "ignored superseded pull request review" };
+    }
+
     const markdown = resultText(result);
 
     await this.github.upsertStickyIssueComment({
@@ -636,8 +702,8 @@ export class ReviewService {
       issueNumber: pullNumber,
       marker: REVIEW_COMMENT_MARKER,
       body: finalComment({
-        repository: state.repository,
-        pullRequest: state.pullRequest,
+        repository,
+        pullRequest,
         sessionId,
         yieldReason,
         markdown,
@@ -645,18 +711,11 @@ export class ReviewService {
       }),
     });
 
-    await this.store.append({
-      event: "review.completed",
-      repository: state.repository.full_name,
-      pullNumber,
-      headSha: state.pullRequest.head?.sha,
-      sessionId,
-      yieldReason,
-    });
     console.info("review completed from opencomputer webhook", {
-      repository: state.repository.full_name,
+      repository: repository.full_name,
       pullNumber,
       sessionId,
+      delivery: route.delivery,
       yieldReason,
     });
 

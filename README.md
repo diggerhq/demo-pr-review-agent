@@ -94,8 +94,8 @@ At runtime, each PR starts a durable session against that existing agent. The re
 const session = await oc.sessions.create({
   agent: process.env.OPENCOMPUTER_AGENT_ID!,
   input: buildReviewTask({ repository, pullRequest, files, diff }),
-  key: `github:${repo}:pull:${number}:sha:${headSha}`,
-  idempotencyKey: githubDeliveryId,
+  key: reviewSessionKey({ owner, repo, pullNumber, headSha, deliveryId }),
+  idempotencyKey: deliveryId,
   destinations: [{
     url: `${PUBLIC_URL}/webhooks/opencomputer?token=${token}`,
     types: ["turn.completed"],
@@ -103,22 +103,27 @@ const session = await oc.sessions.create({
   }],
 });
 
-await saveReviewState({ sessionId: session.id, repository, pullRequest });
+await github.upsertStickyIssueComment({
+  issueNumber: pullNumber,
+  body: `Review is running in OpenComputer session ${session.id}.`,
+});
 ```
 
-When OpenComputer calls back, fetch the durable result and post it to GitHub:
+When OpenComputer calls back, fetch the durable result, read the routing key from the session snapshot, and post back to GitHub. This keeps the example stateless between GitHub and OpenComputer webhooks.
 
 ```ts
 app.post("/webhooks/opencomputer", async (c) => {
   verifyCallbackToken(c.req.query("token"));
 
   const { sessionId } = await c.req.json();
-  const state = await getReviewState(sessionId);
   const session = await oc.sessions.get(sessionId);
+  const route = parseReviewKey(session.snapshot.key);
   const result = await session.result();
 
+  const token = await github.installationTokenForRepository(route);
+  const pullRequest = await github.getPullRequest(route);
   await github.upsertStickyIssueComment({
-    issueNumber: state.pullRequest.number,
+    issueNumber: pullRequest.number,
     marker: "<!-- opencomputer-pr-review -->",
     body: markdownFrom(result),
   });
@@ -148,7 +153,6 @@ The rest is provider-specific glue:
 
 - [src/github.ts](src/github.ts) signs GitHub App JWTs, fetches PR data, and writes comments.
 - [src/prompts.ts](src/prompts.ts) turns GitHub PR context into the agent task.
-- [src/store.ts](src/store.ts) stores the session-to-PR mapping used by the OpenComputer callback.
 - [src/server.ts](src/server.ts) wires config, Hono, GitHub, and OpenComputer together.
 
 ## Configure
@@ -232,8 +236,8 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 
 ## Production Notes
 
-- OpenComputer session execution is durable and completion is callback-driven. This prototype stores the session-to-PR mapping on local disk; a production version should use a durable database.
-- `data/reviews.jsonl` is local process/container state, not a durable audit log.
+- OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in the session `key` so it does not need a database.
+- A first-class OpenComputer `metadata` or `callbackContext` field would be cleaner than overloading `key`; the desired API shape is captured in [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md).
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.
 
@@ -241,3 +245,4 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 
 - [conversation-history.md](conversation-history.md) records user prompts and assistant response summaries.
 - [opencomputer-dx-notes.md](opencomputer-dx-notes.md) records API and developer-experience observations from this build.
+- [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md) captures concrete API/SDK changes suggested by this example.

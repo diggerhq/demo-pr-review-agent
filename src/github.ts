@@ -40,6 +40,11 @@ interface IssueRequest {
   issueNumber: number;
 }
 
+interface RepositoryInstallationRequest {
+  owner: string;
+  repo: string;
+}
+
 function encode(value: string | number): string {
   return encodeURIComponent(value);
 }
@@ -191,6 +196,20 @@ export class GitHubAppClient {
     });
 
     return response.token;
+  }
+
+  async repositoryInstallation({ owner, repo }: RepositoryInstallationRequest): Promise<{ id: number }> {
+    const jwt = signGitHubJwt({
+      issuer: this.clientId,
+      privateKey: this.privateKey,
+    });
+
+    return this.request("GET", `${repoPath(owner, repo)}/installation`, { token: jwt });
+  }
+
+  async installationTokenForRepository({ owner, repo }: RepositoryInstallationRequest): Promise<string> {
+    const installation = await this.repositoryInstallation({ owner, repo });
+    return this.installationToken(installation.id);
   }
 
   getPullRequest({ token, owner, repo, pullNumber }: RepoRequest): Promise<GitHubPullRequest> {
