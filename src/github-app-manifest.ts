@@ -1,4 +1,26 @@
-export function buildGitHubAppManifest({ publicUrl, webhookPath }) {
+interface ManifestInput {
+  publicUrl: string;
+  webhookPath: string;
+}
+
+interface GitHubAppManifest {
+  name: string;
+  url: string;
+  hook_attributes: {
+    url: string;
+    active: boolean;
+  };
+  redirect_url: string;
+  callback_urls: string[];
+  setup_url: string;
+  description: string;
+  public: boolean;
+  request_oauth_on_install: boolean;
+  default_permissions: Record<string, string>;
+  default_events: string[];
+}
+
+export function buildGitHubAppManifest({ publicUrl, webhookPath }: ManifestInput): GitHubAppManifest | null {
   if (!publicUrl) {
     return null;
   }
@@ -25,7 +47,7 @@ export function buildGitHubAppManifest({ publicUrl, webhookPath }) {
   };
 }
 
-export function githubManifestTarget(org = "") {
+export function githubManifestTarget(org = ""): string {
   const trimmed = org.trim();
   if (!trimmed) {
     return "https://github.com/settings/apps/new";

@@ -3,3 +3,4 @@ node_modules/
 npm-debug.log*
 data/*.jsonl
 .DS_Store
+dist/

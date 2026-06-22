@@ -8,9 +8,20 @@
     "node": ">=20.11"
   },
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "test": "node --test",
-    "lint": "node --check src/*.js test/*.js"
+    "build": "tsc",
+    "start": "node dist/src/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.6",
+    "@opencomputer/sdk": "^0.7.1",
+    "hono": "^4.12.26"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
   }
 }

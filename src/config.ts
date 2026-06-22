@@ -1,4 +1,8 @@
-function integer(value, fallback) {
+import type { AppConfig } from "./types.js";
+
+type Env = Record<string, string | undefined>;
+
+function integer(value: string | undefined, fallback: number): number {
   if (value === undefined || value === "") {
     return fallback;
   }
@@ -11,7 +15,7 @@ function integer(value, fallback) {
   return parsed;
 }
 
-function bool(value, fallback = false) {
+function bool(value: string | undefined, fallback = false): boolean {
   if (value === undefined || value === "") {
     return fallback;
   }
@@ -19,7 +23,7 @@ function bool(value, fallback = false) {
   return ["1", "true", "yes", "on"].includes(value.toLowerCase());
 }
 
-export function normalizePrivateKey(env) {
+export function normalizePrivateKey(env: Env): string {
   if (env.GITHUB_PRIVATE_KEY_BASE64) {
     return Buffer.from(env.GITHUB_PRIVATE_KEY_BASE64, "base64").toString("utf8");
   }
@@ -31,7 +35,7 @@ export function normalizePrivateKey(env) {
   return env.GITHUB_PRIVATE_KEY.replace(/^"|"$/g, "").replace(/\\n/g, "\n");
 }
 
-export function loadConfig(env = process.env) {
+export function loadConfig(env: Env = process.env): AppConfig {
   const webhookPath = env.WEBHOOK_PATH || "/webhooks/github";
   const publicUrl = (env.PUBLIC_URL || "").replace(/\/$/, "");
 
@@ -57,7 +61,7 @@ export function loadConfig(env = process.env) {
       model: env.OPENCOMPUTER_AGENT_MODEL || "anthropic/claude-opus-4-8",
       limits: {
         turns: integer(env.OPENCOMPUTER_LIMIT_TURNS, 1),
-        turn_seconds: integer(env.OPENCOMPUTER_LIMIT_TURN_SECONDS, 600),
+        turnSeconds: integer(env.OPENCOMPUTER_LIMIT_TURN_SECONDS, 600),
         tokens: integer(env.OPENCOMPUTER_LIMIT_TOKENS, 120000),
       },
     },
@@ -72,8 +76,8 @@ export function loadConfig(env = process.env) {
   };
 }
 
-export function missingRequiredConfig(config) {
-  const missing = [];
+export function missingRequiredConfig(config: AppConfig): string[] {
+  const missing: string[] = [];
 
   if (!config.github.appId) missing.push("GITHUB_APP_ID");
   if (!config.github.clientId) missing.push("GITHUB_CLIENT_ID or GITHUB_APP_ID");
@@ -84,17 +88,17 @@ export function missingRequiredConfig(config) {
   return missing;
 }
 
-export function validateConfig(config) {
+export function validateConfig(config: AppConfig): void {
   const missing = missingRequiredConfig(config);
 
   if (missing.length > 0) {
-    const error = new Error(`Missing required environment variables: ${missing.join(", ")}`);
+    const error = new Error(`Missing required environment variables: ${missing.join(", ")}`) as Error & { missing?: string[] };
     error.missing = missing;
     throw error;
   }
 }
 
-export function webhookUrl(config) {
+export function webhookUrl(config: AppConfig): string {
   if (!config.publicUrl) {
     return config.webhookPath;
   }

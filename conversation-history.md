@@ -139,3 +139,19 @@ I searched the repo for Render references, removed the unused `render.yaml` blue
 > User: "why aren't we using OpenComputer SDK but raw api calls instead? is there a reason? genuinely curious"
 
 I explained that raw REST was a pragmatic prototype choice: the integration only needs agent creation, session creation, result polling, and event content reads, so [src/opencomputer.js](src/opencomputer.js) stays small and avoids adding dependencies while the API shape is still being explored. I also noted that switching to the SDK would make sense if it provides maintained types, retries, pagination helpers, streaming/event abstractions, or cleaner credential/session handling.
+
+> User: "yes lets switch to SDK and also take a step back and look at the apps design. i feel like it coud be cleaner - entry point structured as \"here's what's going on scaffold\", less boilerplate wrappers, html separate from handlers. use some framework even if lightweight most definitely for routes etc. no need for opencomputer wrapper use sdk instead. use logging lib or builtin smth, no need for wrappers. its an example to showcase opencomputer so less is more"
+
+I refactored the app toward a smaller example shape: [src/server.ts](src/server.ts) wires dependencies, [src/app.ts](src/app.ts) owns Hono routes, [src/views.ts](src/views.ts) owns setup HTML, and [src/review.ts](src/review.ts) calls `OpenComputer` from `@opencomputer/sdk` directly instead of going through the deleted local OpenComputer wrapper.
+
+> User: "the 0.7.1 sdk is the right one, not agents sdk"
+
+I used `@opencomputer/sdk@0.7.1` and ignored the older `@opencomputer/agents-sdk` package. I also logged the package-name confusion in [opencomputer-dx-notes.md](opencomputer-dx-notes.md).
+
+> User: "yes pls log ALL concerns re DX of opencomputer while we are building"
+
+I added OpenComputer DX notes about SDK package discovery, the sandbox-first npm README, REST-to-SDK camelCase migration details, and the need for a canonical durable-session polling example.
+
+> User: "and typescript pls not raw js"
+
+I converted source and tests to TypeScript, added [tsconfig.json](tsconfig.json), updated package scripts to build to `dist`, changed Docker/Fly deployment to build the TypeScript app, and kept runtime execution on compiled JavaScript. Local checks now run through `tsx` for tests and `tsc --noEmit` for linting.

@@ -76,7 +76,7 @@ End-to-end flow:
 3. The service quickly returns HTTP 202, then continues review work in the Node process.
 4. It authenticates as the GitHub App installation and posts a queued sticky PR comment.
 5. It fetches PR metadata, changed files, and the unified diff from GitHub.
-6. It creates or reuses an OpenComputer agent and starts a durable session keyed by repo, PR number, and head SHA.
+6. It uses `@opencomputer/sdk` to create or reuse an OpenComputer agent and start a durable session keyed by repo, PR number, and head SHA.
 7. It polls the OpenComputer session result.
 8. It updates the same PR comment with the final review or a failure message.
 
@@ -85,11 +85,19 @@ The OpenComputer task receives PR metadata, the PR body, changed-file summaries,
 ## Moving Parts
 
 - **GitHub App**: receives PR events and comments after installation in a repo.
-- **Fly web service**: public Node HTTP app at `https://oc-pr-review-agent-digger-test0.fly.dev`.
+- **Fly web service**: public TypeScript/Hono Node app at `https://oc-pr-review-agent-digger-test0.fly.dev`.
 - **GitHub API**: fetches PR data and creates or updates the sticky review comment.
-- **OpenComputer Durable Agent Sessions**: runs the background review.
+- **OpenComputer SDK**: `OpenComputer` from `@opencomputer/sdk` creates agents, starts sessions, and reads session results.
 - **Model credential**: Anthropic key or OpenComputer credential used by the OpenComputer agent.
 - **Local event log**: `data/reviews.jsonl` records review lifecycle events for development.
+
+The code is intentionally small:
+
+- [src/server.ts](src/server.ts): process entry point and dependency wiring.
+- [src/app.ts](src/app.ts): Hono routes.
+- [src/views.ts](src/views.ts): setup-page HTML.
+- [src/review.ts](src/review.ts): PR review orchestration and direct OpenComputer SDK calls.
+- [src/github.ts](src/github.ts): GitHub App API calls.
 
 ## Configure
 
@@ -103,6 +111,7 @@ Required environment variables:
 Common optional values:
 
 - `PUBLIC_URL`: public base URL used for setup pages and webhook hints.
+- `OPENCOMPUTER_BASE_URL`: defaults to `https://api.opencomputer.dev/v3`.
 - `GITHUB_CLIENT_ID`: recommended by GitHub for JWT `iss`; falls back to `GITHUB_APP_ID`.
 - `GITHUB_APP_SLUG`: enables the install link on `/`.
 - `ANTHROPIC_API_KEY`: passed to OpenComputer when creating the agent if no credential ID is configured.
@@ -120,7 +129,14 @@ The service can boot before all secrets are configured. In that state `/healthz`
 cp .env.example .env
 npm install
 npm test
+npm run build
 npm start
+```
+
+For iterative development:
+
+```bash
+npm run dev
 ```
 
 For local webhook testing, expose the server with a tunnel, set `PUBLIC_URL`, and point the GitHub App webhook URL at:

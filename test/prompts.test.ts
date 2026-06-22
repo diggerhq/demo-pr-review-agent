@@ -15,7 +15,7 @@ test("truncateText keeps head and tail with an omission marker", () => {
 
 test("buildReviewTask includes PR context and untrusted-content warning", () => {
   const task = buildReviewTask({
-    repository: { full_name: "acme/widgets" },
+    repository: { full_name: "acme/widgets", name: "widgets", owner: { login: "acme" } },
     pullRequest: {
       number: 12,
       title: "Fix widget cache",

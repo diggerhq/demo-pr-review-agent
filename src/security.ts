@@ -1,6 +1,6 @@
 import { createHmac, createSign, timingSafeEqual } from "node:crypto";
 
-export function verifyGitHubSignature(secret, payload, signatureHeader) {
+export function verifyGitHubSignature(secret: string, payload: Buffer, signatureHeader: string | undefined): boolean {
   if (!secret || !signatureHeader || !signatureHeader.startsWith("sha256=")) {
     return false;
   }
@@ -16,11 +16,19 @@ export function verifyGitHubSignature(secret, payload, signatureHeader) {
   return timingSafeEqual(expectedBytes, actualBytes);
 }
 
-export function base64Url(value) {
+export function base64Url(value: string): string {
   return Buffer.from(value).toString("base64url");
 }
 
-export function signGitHubJwt({ issuer, privateKey, now = Date.now() }) {
+export function signGitHubJwt({
+  issuer,
+  privateKey,
+  now = Date.now(),
+}: {
+  issuer: string;
+  privateKey: string;
+  now?: number;
+}): string {
   const nowSeconds = Math.floor(now / 1000);
   const header = {
     alg: "RS256",

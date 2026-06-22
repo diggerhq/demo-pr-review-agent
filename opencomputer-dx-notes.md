@@ -8,6 +8,8 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - The REST API is easy to integrate without taking a dependency on the TypeScript SDK: agents, sessions, events, steering, and credentials all have direct endpoint mappings.
 - The split between org API keys and session-scoped client tokens is clear, and the docs call out which token belongs on the server versus in a browser.
 - The append-only event model with `seq`, `type`, and `yield_reason` is a good fit for resumable background work.
+- The `@opencomputer/sdk` TypeScript types expose a clean Durable Agent Sessions surface: `OpenComputer`, `agents.create`, `sessions.create`, and `session.result()`.
+- The SDK's camelCase request/response shape is nicer in application code than raw REST snake_case, especially for `limits.turnSeconds`, `lastTurn`, and `yieldReason`.
 
 ## Potential Improvements
 
@@ -18,6 +20,9 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Include a Durable Agent Sessions example for GitHub App or CI-review workflows. This integration pattern raises concrete questions about payload size, diff truncation, result posting, and webhook retries.
 - Clarify recommended production patterns for long-running session completion: in-process polling, OpenComputer destinations/webhooks, queue workers, or some combination.
 - First-class artifacts for patches, file annotations, and review reports would make PR review integrations cleaner once the artifacts API lands.
+- Make the npm README for `@opencomputer/sdk` lead with, or at least prominently include, the Durable Agent Sessions API. The current package README is sandbox-first, even though the same package is the right SDK for `OpenComputer` sessions.
+- Clarify package naming. Discovering both `@opencomputer/sdk` and `@opencomputer/agents-sdk` makes it easy for a new user to pick the older/wrong package unless docs explicitly say `@opencomputer/sdk` is the current path.
+- Add a migration note showing raw REST field names versus SDK camelCase names. Moving from REST to SDK changed `turn_seconds` to `turnSeconds`, `last_turn` to `lastTurn`, and `yield_reason` to `yieldReason`.
 
 ## Open Questions While Building
 
@@ -43,3 +48,5 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Once the installation permission update was accepted, redelivering the existing `/oc-review` webhook was enough to complete the end-to-end flow. This is a useful recovery/debug path for setup issues: fix permissions, redeliver, then inspect the sticky PR comment and session ID.
 - README and deployment docs can drift during iterative prototyping. The repo had an early alternate-host blueprint and provider-specific URL fallback left over after Fly became the real deployment target; active docs and code now point at Fly only.
 - The REST API was simple enough that a no-dependency client wrapper was faster than introducing the SDK for this prototype. SDK adoption would be more compelling with an official server-side PR-review example, documented retry/idempotency behavior, typed result/event helpers, and a clear "use SDK vs raw HTTP" decision guide.
+- The refactor to `@opencomputer/sdk@0.7.1` removed the local OpenComputer HTTP wrapper cleanly. The SDK already handles auth, retries for safe/idempotent calls, JSON normalization, and typed session handles.
+- SDK examples should show the durable-session polling pattern directly: create or get an agent, create a session with `idempotencyKey`, call `session.result()` until `lastTurn.yieldReason`, then post the result somewhere external.

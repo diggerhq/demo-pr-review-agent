@@ -7,6 +7,7 @@ test("buildGitHubAppManifest creates the PR reviewer GitHub App manifest", () =>
     publicUrl: "https://agent.example.com",
     webhookPath: "/webhooks/github",
   });
+  assert.ok(manifest);
 
   assert.equal(manifest.hook_attributes.url, "https://agent.example.com/webhooks/github");
   assert.equal(manifest.default_permissions.contents, "read");

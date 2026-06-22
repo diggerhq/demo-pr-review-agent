@@ -1,19 +1,93 @@
+import type { CreateAgentParams, Session } from "@opencomputer/sdk";
 import { REVIEW_AGENT_PROMPT, buildReviewTask, limitCommentBody } from "./prompts.js";
-import { serializeError } from "./log.js";
+import type {
+  GitHubPullRequest,
+  GitHubRepository,
+  GitHubWebhookPayload,
+  OpenComputerSession,
+  ReviewServiceDeps,
+} from "./types.js";
 
 export const REVIEW_COMMENT_MARKER = "<!-- opencomputer-pr-review -->";
 
 const PULL_REQUEST_ACTIONS = new Set(["opened", "reopened", "synchronize", "ready_for_review"]);
 
-function shortSha(sha = "") {
+type SessionResult = Awaited<ReturnType<Session["result"]>>;
+
+interface ReviewCommand {
+  matched: boolean;
+  instruction: string;
+}
+
+interface WebhookContext {
+  event?: string;
+  delivery?: string;
+  payload: GitHubWebhookPayload;
+}
+
+interface QueuedReviewJob {
+  delivery?: string;
+  installationId?: number;
+  repository: GitHubRepository;
+  pullRequest: GitHubPullRequest;
+  trigger: string;
+  manualInstruction?: string;
+  installationToken?: string;
+}
+
+interface ManualReviewJob {
+  delivery?: string;
+  installationId?: number;
+  repository: GitHubRepository;
+  pullNumber: number;
+  manualInstruction: string;
+}
+
+interface CommentContext {
+  repository: GitHubRepository;
+  pullRequest: GitHubPullRequest;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function errorRecord(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return { message: String(error) };
+  }
+
+  const maybeApiError = error as Error & {
+    status?: number;
+    details?: unknown;
+    code?: string;
+  };
+
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    status: maybeApiError.status,
+    details: maybeApiError.details,
+    code: maybeApiError.code,
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function shortSha(sha = ""): string {
   return sha ? sha.slice(0, 12) : "unknown";
 }
 
-function sessionKey(repository, pullRequest) {
+function sessionKey(repository: GitHubRepository, pullRequest: GitHubPullRequest): string {
   return `github:${repository.full_name}:pull:${pullRequest.number}:sha:${pullRequest.head?.sha}`;
 }
 
-export function parseReviewCommand(body, commandPrefix) {
+export function parseReviewCommand(body: string, commandPrefix: string): ReviewCommand {
   const trimmed = body.trim();
   if (trimmed === commandPrefix) {
     return {
@@ -35,28 +109,34 @@ export function parseReviewCommand(body, commandPrefix) {
   };
 }
 
-function resultText(result) {
+function resultText(result: SessionResult): string {
   const event = result?.result;
   if (!event) {
     return "";
   }
 
-  if (typeof event.body?.text === "string") {
-    return event.body.text;
+  const body = event.body as Record<string, unknown> | undefined;
+  if (typeof body?.text === "string") {
+    return body.text;
   }
 
-  if (typeof event.body?.summary === "string") {
-    return event.body.summary;
+  if (typeof body?.summary === "string") {
+    return body.summary;
   }
 
-  if (event.body) {
-    return JSON.stringify(event.body, null, 2);
+  if (body) {
+    return JSON.stringify(body, null, 2);
   }
 
   return "";
 }
 
-function reviewHeading({ repository, pullRequest, sessionId = "", status }) {
+function reviewHeading({
+  repository,
+  pullRequest,
+  sessionId = "",
+  status,
+}: CommentContext & { sessionId?: string; status: string }): string {
   const sessionLine = sessionId ? `- Session: \`${sessionId}\`\n` : "";
 
   return `${REVIEW_COMMENT_MARKER}
@@ -70,7 +150,21 @@ ${sessionLine}
 `;
 }
 
-function progressComment({ repository, pullRequest, status, detail, trigger = "", sessionId = "", maxChars }) {
+function progressComment({
+  repository,
+  pullRequest,
+  status,
+  detail,
+  trigger = "",
+  sessionId = "",
+  maxChars,
+}: CommentContext & {
+  status: string;
+  detail: string;
+  trigger?: string;
+  sessionId?: string;
+  maxChars: number;
+}): string {
   const triggerLine = trigger ? `- Trigger: ${trigger}\n` : "";
   const body = `${reviewHeading({ repository, pullRequest, sessionId, status })}${triggerLine}
 ${detail}`;
@@ -78,21 +172,43 @@ ${detail}`;
   return limitCommentBody(body, maxChars);
 }
 
-function runningComment({ repository, pullRequest, sessionId, trigger }) {
+function runningComment({
+  repository,
+  pullRequest,
+  sessionId,
+  trigger,
+}: CommentContext & { sessionId: string; trigger: string }): string {
   return `${reviewHeading({ repository, pullRequest, sessionId, status: "running" })}
 - Trigger: ${trigger}
 
 Review is running in an OpenComputer durable agent session. This comment will update when the session completes.`;
 }
 
-function finalComment({ repository, pullRequest, sessionId, yieldReason, markdown, maxChars }) {
+function finalComment({
+  repository,
+  pullRequest,
+  sessionId,
+  yieldReason,
+  markdown,
+  maxChars,
+}: CommentContext & {
+  sessionId: string;
+  yieldReason: string;
+  markdown: string;
+  maxChars: number;
+}): string {
   const body = `${reviewHeading({ repository, pullRequest, sessionId, status: yieldReason })}
 ${markdown || "The session completed without a user-facing review message."}`;
 
   return limitCommentBody(body, maxChars);
 }
 
-function failureComment({ repository, pullRequest, error, maxChars }) {
+function failureComment({
+  repository,
+  pullRequest,
+  error,
+  maxChars,
+}: CommentContext & { error: unknown; maxChars: number }): string {
   const body = `${REVIEW_COMMENT_MARKER}
 ## OpenComputer PR Review
 
@@ -104,23 +220,29 @@ function failureComment({ repository, pullRequest, error, maxChars }) {
 The review failed before a final result could be posted.
 
 \`\`\`text
-${error.message}
+${errorMessage(error)}
 \`\`\``;
 
   return limitCommentBody(body, maxChars);
 }
 
 export class ReviewService {
-  constructor({ config, github, openComputer, store, logger }) {
+  config: ReviewServiceDeps["config"];
+  github: ReviewServiceDeps["github"];
+  openComputer: ReviewServiceDeps["openComputer"];
+  store: ReviewServiceDeps["store"];
+  agentId: string;
+
+  constructor({ config, github, openComputer, store }: ReviewServiceDeps) {
     this.config = config;
     this.github = github;
     this.openComputer = openComputer;
     this.store = store;
-    this.logger = logger;
+    this.agentId = config.openComputer.agentId;
   }
 
-  handleWebhook({ event, delivery, payload }) {
-    this.logger.info("received webhook", {
+  handleWebhook({ event, delivery, payload }: WebhookContext): { accepted: boolean; reason: string } {
+    console.info("received webhook", {
       delivery,
       event,
       action: payload?.action,
@@ -129,7 +251,7 @@ export class ReviewService {
     });
 
     if (event === "ping") {
-      this.logger.info("received github ping", { delivery });
+      console.info("received github ping", { delivery });
       return { accepted: true, reason: "ping" };
     }
 
@@ -144,9 +266,13 @@ export class ReviewService {
     return { accepted: false, reason: `ignored event ${event}` };
   }
 
-  handlePullRequestWebhook({ delivery, payload }) {
-    if (!PULL_REQUEST_ACTIONS.has(payload.action)) {
+  handlePullRequestWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
+    if (!PULL_REQUEST_ACTIONS.has(payload.action || "")) {
       return { accepted: false, reason: `ignored pull_request action ${payload.action}` };
+    }
+
+    if (!payload.pull_request) {
+      return { accepted: false, reason: "ignored pull_request event without pull request data" };
     }
 
     if (payload.pull_request?.draft && !this.config.review.includeDrafts) {
@@ -164,7 +290,7 @@ export class ReviewService {
     return { accepted: true, reason: "queued pull request review" };
   }
 
-  handleIssueCommentWebhook({ delivery, payload }) {
+  handleIssueCommentWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
     if (payload.action !== "created") {
       return { accepted: false, reason: `ignored issue_comment action ${payload.action}` };
     }
@@ -189,18 +315,18 @@ export class ReviewService {
     return { accepted: true, reason: "queued manual pull request review" };
   }
 
-  queueReview(job) {
+  queueReview(job: QueuedReviewJob): void {
     setImmediate(() => {
       this.reviewPullRequest(job).catch((error) => {
-        this.logger.error("review job crashed", {
+        console.error("review job crashed", {
           delivery: job.delivery,
-          error: serializeError(error),
+          error: errorRecord(error),
         });
       });
     });
   }
 
-  queueManualReview(job) {
+  queueManualReview(job: ManualReviewJob): void {
     setImmediate(async () => {
       try {
         const token = await this.github.installationToken(job.installationId);
@@ -221,12 +347,55 @@ export class ReviewService {
           installationToken: token,
         });
       } catch (error) {
-        this.logger.error("manual review job crashed", {
+        console.error("manual review job crashed", {
           delivery: job.delivery,
-          error: serializeError(error),
+          error: errorRecord(error),
         });
       }
     });
+  }
+
+  async ensureOpenComputerAgent(): Promise<string> {
+    if (this.agentId) {
+      return this.agentId;
+    }
+
+    const params: CreateAgentParams = {
+      name: this.config.openComputer.agentName,
+      runtime: "claude",
+      model: this.config.openComputer.model,
+      prompt: REVIEW_AGENT_PROMPT,
+      limits: this.config.openComputer.limits,
+    };
+
+    if (this.config.openComputer.credentialId) {
+      params.credential = this.config.openComputer.credentialId;
+    } else if (this.config.openComputer.anthropicKey) {
+      params.key = this.config.openComputer.anthropicKey;
+    }
+
+    const agent = await this.openComputer.agents.create(params);
+    this.agentId = agent.id;
+    return agent.id;
+  }
+
+  async waitForSessionResult(session: OpenComputerSession): Promise<SessionResult> {
+    const deadline = Date.now() + this.config.review.waitTimeoutMs;
+    let lastResult: SessionResult | null = null;
+
+    while (Date.now() < deadline) {
+      lastResult = await session.result();
+      if (lastResult?.lastTurn?.yieldReason) {
+        return lastResult;
+      }
+      await sleep(this.config.review.pollIntervalMs);
+    }
+
+    const error = new Error(`Timed out waiting for OpenComputer session ${session.id}`) as Error & {
+      lastResult?: SessionResult | null;
+    };
+    error.lastResult = lastResult;
+    throw error;
   }
 
   async reviewPullRequest({
@@ -237,7 +406,7 @@ export class ReviewService {
     trigger,
     manualInstruction = "",
     installationToken = "",
-  }) {
+  }: QueuedReviewJob): Promise<void> {
     const owner = repository.owner.login;
     const repo = repository.name;
     const pullNumber = pullRequest.number;
@@ -251,7 +420,7 @@ export class ReviewService {
       pullNumber,
       headSha: pullRequest.head?.sha,
     });
-    this.logger.info("review started", {
+    console.info("review started", {
       delivery,
       trigger,
       repository: repository.full_name,
@@ -276,14 +445,14 @@ export class ReviewService {
           maxChars: this.config.review.commentMaxChars,
         }),
       });
-      this.logger.info("review progress comment posted", {
+      console.info("review progress comment posted", {
         delivery,
         repository: repository.full_name,
         pullNumber,
         status: "queued",
       });
 
-      this.logger.info("review fetching diff", {
+      console.info("review fetching diff", {
         delivery,
         repository: repository.full_name,
         pullNumber,
@@ -308,20 +477,12 @@ export class ReviewService {
         }),
       });
 
-      this.logger.info("review ensuring opencomputer agent", {
+      console.info("review ensuring opencomputer agent", {
         delivery,
         repository: repository.full_name,
         pullNumber,
       });
-      const agentId = await this.openComputer.ensureAgent({
-        agentId: this.config.openComputer.agentId,
-        name: this.config.openComputer.agentName,
-        prompt: REVIEW_AGENT_PROMPT,
-        model: this.config.openComputer.model,
-        credentialId: this.config.openComputer.credentialId,
-        anthropicKey: this.config.openComputer.anthropicKey,
-        limits: this.config.openComputer.limits,
-      });
+      const agentId = await this.ensureOpenComputerAgent();
       const input = buildReviewTask({
         repository,
         pullRequest,
@@ -330,21 +491,21 @@ export class ReviewService {
         maxDiffChars: this.config.review.maxDiffChars,
         manualInstruction,
       });
-      this.logger.info("review creating opencomputer session", {
+      console.info("review creating opencomputer session", {
         delivery,
         repository: repository.full_name,
         pullNumber,
         agentId,
       });
-      const session = await this.openComputer.createSession({
+      const session = await this.openComputer.sessions.create({
         agent: agentId,
         input,
         key: sessionKey(repository, pullRequest),
         limits: this.config.openComputer.limits,
         idempotencyKey: delivery,
       });
-      const sessionId = session.session.id;
-      this.logger.info("review opencomputer session created", {
+      const sessionId = session.id;
+      console.info("review opencomputer session created", {
         delivery,
         repository: repository.full_name,
         pullNumber,
@@ -360,17 +521,14 @@ export class ReviewService {
         body: runningComment({ repository, pullRequest, sessionId, trigger }),
       });
 
-      this.logger.info("review waiting for opencomputer result", {
+      console.info("review waiting for opencomputer result", {
         delivery,
         repository: repository.full_name,
         pullNumber,
         sessionId,
       });
-      const result = await this.openComputer.waitForResult(sessionId, {
-        timeoutMs: this.config.review.waitTimeoutMs,
-        pollIntervalMs: this.config.review.pollIntervalMs,
-      });
-      const yieldReason = result.last_turn?.yield_reason || "unknown";
+      const result = await this.waitForSessionResult(session);
+      const yieldReason = result.lastTurn?.yieldReason || "unknown";
       const markdown = resultText(result);
 
       await this.github.upsertStickyIssueComment({
@@ -398,7 +556,7 @@ export class ReviewService {
         sessionId,
         yieldReason,
       });
-      this.logger.info("review completed", {
+      console.info("review completed", {
         delivery,
         repository: repository.full_name,
         pullNumber,
@@ -406,11 +564,11 @@ export class ReviewService {
         yieldReason,
       });
     } catch (error) {
-      this.logger.error("review failed", {
+      console.error("review failed", {
         delivery,
         repository: repository.full_name,
         pullNumber,
-        error: serializeError(error),
+        error: errorRecord(error),
       });
 
       await this.store.append({
@@ -419,7 +577,7 @@ export class ReviewService {
         repository: repository.full_name,
         pullNumber,
         headSha: pullRequest.head?.sha,
-        error: serializeError(error),
+        error: errorRecord(error),
       });
 
       if (token) {

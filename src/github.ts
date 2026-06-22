@@ -1,7 +1,13 @@
 import { signGitHubJwt } from "./security.js";
+import type { AppConfig, GitHubChangedFile, GitHubIssueComment, GitHubPullRequest } from "./types.js";
 
 export class GitHubApiError extends Error {
-  constructor(message, { status, method, path, details }) {
+  status: number;
+  method: string;
+  path: string;
+  details: unknown;
+
+  constructor(message: string, { status, method, path, details }: { status: number; method: string; path: string; details: unknown }) {
     super(message);
     this.name = "GitHubApiError";
     this.status = status;
@@ -11,15 +17,38 @@ export class GitHubApiError extends Error {
   }
 }
 
-function encode(value) {
+type GitHubConfig = AppConfig["github"];
+
+interface RequestOptions {
+  token?: string;
+  body?: unknown;
+  accept?: string;
+  raw?: boolean;
+}
+
+interface RepoRequest {
+  token: string;
+  owner: string;
+  repo: string;
+  pullNumber: number;
+}
+
+interface IssueRequest {
+  token: string;
+  owner: string;
+  repo: string;
+  issueNumber: number;
+}
+
+function encode(value: string | number): string {
   return encodeURIComponent(value);
 }
 
-function repoPath(owner, repo) {
+function repoPath(owner: string, repo: string): string {
   return `/repos/${encode(owner)}/${encode(repo)}`;
 }
 
-function parseNextLink(linkHeader) {
+function parseNextLink(linkHeader: string | null): string {
   if (!linkHeader) {
     return "";
   }
@@ -35,7 +64,14 @@ function parseNextLink(linkHeader) {
 }
 
 export class GitHubAppClient {
-  constructor({ appId, clientId, privateKey, apiVersion }) {
+  appId: string;
+  clientId: string;
+  privateKey: string;
+  apiVersion: string;
+  apiBase: string;
+  installationTokens: Map<string, { token: string; expiresAt: number }>;
+
+  constructor({ appId, clientId, privateKey, apiVersion }: GitHubConfig) {
     this.appId = appId;
     this.clientId = clientId || appId;
     this.privateKey = privateKey;
@@ -44,9 +80,9 @@ export class GitHubAppClient {
     this.installationTokens = new Map();
   }
 
-  async request(method, path, { token, body, accept = "application/vnd.github+json", raw = false } = {}) {
+  async request(method: string, path: string, { token, body, accept = "application/vnd.github+json", raw = false }: RequestOptions = {}): Promise<any> {
     const url = path.startsWith("http") ? path : `${this.apiBase}${path}`;
-    const headers = {
+    const headers: Record<string, string> = {
       Accept: accept,
       "User-Agent": "opencomputer-pr-review-agent",
       "X-GitHub-Api-Version": this.apiVersion,
@@ -56,7 +92,7 @@ export class GitHubAppClient {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    const init = {
+    const init: RequestInit = {
       method,
       headers,
     };
@@ -96,7 +132,7 @@ export class GitHubAppClient {
     return JSON.parse(text);
   }
 
-  async requestPaginated(path, { token, accept } = {}) {
+  async requestPaginated<T>(path: string, { token, accept }: { token: string; accept?: string }): Promise<T[]> {
     let next = path;
     const items = [];
 
@@ -121,14 +157,18 @@ export class GitHubAppClient {
         });
       }
 
-      items.push(...JSON.parse(text));
+      items.push(...(JSON.parse(text) as T[]));
       next = parseNextLink(response.headers.get("link"));
     }
 
     return items;
   }
 
-  async installationToken(installationId) {
+  async installationToken(installationId: number | undefined): Promise<string> {
+    if (!installationId) {
+      throw new Error("GitHub webhook payload did not include an installation id");
+    }
+
     const cacheKey = String(installationId);
     const cached = this.installationTokens.get(cacheKey);
     if (cached && cached.expiresAt > Date.now() + 60_000) {
@@ -153,11 +193,11 @@ export class GitHubAppClient {
     return response.token;
   }
 
-  getPullRequest({ token, owner, repo, pullNumber }) {
+  getPullRequest({ token, owner, repo, pullNumber }: RepoRequest): Promise<GitHubPullRequest> {
     return this.request("GET", `${repoPath(owner, repo)}/pulls/${pullNumber}`, { token });
   }
 
-  getPullRequestDiff({ token, owner, repo, pullNumber }) {
+  getPullRequestDiff({ token, owner, repo, pullNumber }: RepoRequest): Promise<string> {
     return this.request("GET", `${repoPath(owner, repo)}/pulls/${pullNumber}`, {
       token,
       accept: "application/vnd.github.v3.diff",
@@ -165,33 +205,52 @@ export class GitHubAppClient {
     });
   }
 
-  listPullRequestFiles({ token, owner, repo, pullNumber }) {
-    return this.requestPaginated(`${repoPath(owner, repo)}/pulls/${pullNumber}/files?per_page=100`, {
+  listPullRequestFiles({ token, owner, repo, pullNumber }: RepoRequest): Promise<GitHubChangedFile[]> {
+    return this.requestPaginated<GitHubChangedFile>(`${repoPath(owner, repo)}/pulls/${pullNumber}/files?per_page=100`, {
       token,
     });
   }
 
-  listIssueComments({ token, owner, repo, issueNumber }) {
-    return this.requestPaginated(`${repoPath(owner, repo)}/issues/${issueNumber}/comments?per_page=100`, {
+  listIssueComments({ token, owner, repo, issueNumber }: IssueRequest): Promise<GitHubIssueComment[]> {
+    return this.requestPaginated<GitHubIssueComment>(`${repoPath(owner, repo)}/issues/${issueNumber}/comments?per_page=100`, {
       token,
     });
   }
 
-  createIssueComment({ token, owner, repo, issueNumber, body }) {
+  createIssueComment({ token, owner, repo, issueNumber, body }: IssueRequest & { body: string }): Promise<GitHubIssueComment> {
     return this.request("POST", `${repoPath(owner, repo)}/issues/${issueNumber}/comments`, {
       token,
       body: { body },
     });
   }
 
-  updateIssueComment({ token, owner, repo, commentId, body }) {
+  updateIssueComment({
+    token,
+    owner,
+    repo,
+    commentId,
+    body,
+  }: {
+    token: string;
+    owner: string;
+    repo: string;
+    commentId: number;
+    body: string;
+  }): Promise<GitHubIssueComment> {
     return this.request("PATCH", `${repoPath(owner, repo)}/issues/comments/${commentId}`, {
       token,
       body: { body },
     });
   }
 
-  async upsertStickyIssueComment({ token, owner, repo, issueNumber, marker, body }) {
+  async upsertStickyIssueComment({
+    token,
+    owner,
+    repo,
+    issueNumber,
+    marker,
+    body,
+  }: IssueRequest & { marker: string; body: string }): Promise<GitHubIssueComment> {
     const comments = await this.listIssueComments({ token, owner, repo, issueNumber });
     const existing = [...comments].reverse().find((comment) => comment.body?.includes(marker));
 
