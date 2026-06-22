@@ -1,12 +1,13 @@
 # OpenComputer PR Review Agent
 
-A serverless GitHub App that reviews pull requests with OpenComputer Durable Agent Sessions and posts the result back as one sticky PR comment.
+A serverless GitHub App that reviews pull requests with [OpenComputer Durable Agent Sessions](https://docs.opencomputer.dev/agent-sessions/overview) and posts the result back as one sticky PR comment.
 
 Live demo:
 
 - App: [oc-pr-review.mo-b8f.workers.dev](https://oc-pr-review.mo-b8f.workers.dev)
 - GitHub App: [0x Test PR Reviewer](https://github.com/apps/0x-test-pr-reviewer)
 - Verified demo PR: [diggerhq/test-durable-0#3](https://github.com/diggerhq/test-durable-0/pull/3)
+- Docs: [Durable Agent Sessions](https://docs.opencomputer.dev/agent-sessions/overview), [sessions](https://docs.opencomputer.dev/agent-sessions/sessions), [webhooks](https://docs.opencomputer.dev/agent-sessions/webhooks), and [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference)
 
 ## Test The Live App
 
@@ -37,14 +38,14 @@ The Worker has four responsibilities:
 
 1. Accept a GitHub webhook and run the short setup path.
 2. Fetch the PR metadata, changed files, and diff.
-3. Start an OpenComputer Durable Agent Session with that PR context and a completion callback.
-4. Let the OpenComputer callback update one sticky PR comment when the session finishes.
+3. Start an [OpenComputer Durable Agent Session](https://docs.opencomputer.dev/agent-sessions/sessions) with that PR context and a completion callback.
+4. Let the [OpenComputer webhook](https://docs.opencomputer.dev/agent-sessions/webhooks) update one sticky PR comment when the session finishes.
 
-The app keeps no database, local queue, or in-memory job state. Each OpenComputer session stores the GitHub routing data in `metadata`; when OpenComputer calls back, the Worker reads that metadata from the session snapshot and knows which PR comment to update.
+The app keeps no database, local queue, or in-memory job state. Each [OpenComputer session](https://docs.opencomputer.dev/agent-sessions/sessions) stores the GitHub routing data in `metadata`; when OpenComputer calls back, the Worker reads that metadata from the session snapshot and knows which PR comment to update.
 
 Automatic reviews run on `pull_request.opened`, `reopened`, `synchronize`, and `ready_for_review`. Manual reviews run from PR comments starting with `/oc-review`. Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`.
 
-Bootstrap the OpenComputer agent once, then set `OPENCOMPUTER_AGENT_ID` in the deployed app. The script is [scripts/bootstrap-opencomputer-agent.ts](scripts/bootstrap-opencomputer-agent.ts).
+Bootstrap the OpenComputer agent once, then set `OPENCOMPUTER_AGENT_ID` in the deployed app. See the OpenComputer [agents docs](https://docs.opencomputer.dev/agent-sessions/agents) and the local script [scripts/bootstrap-opencomputer-agent.ts](scripts/bootstrap-opencomputer-agent.ts).
 
 ```ts
 import { OpenComputer } from "@opencomputer/sdk";
@@ -63,7 +64,7 @@ const agent = existingAgent || await oc.agents.create({
 });
 ```
 
-At runtime, each PR starts a durable session against that existing agent. The real code is in [src/review.ts](src/review.ts).
+At runtime, each PR starts a [durable session](https://docs.opencomputer.dev/agent-sessions/sessions) against that existing agent. The real code is in [src/review.ts](src/review.ts), and the SDK shape is documented in the [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
 
 ```ts
 const session = await oc.sessions.create({
@@ -91,7 +92,7 @@ await github.upsertStickyIssueComment({
 });
 ```
 
-When OpenComputer calls back, fetch the durable result, read the routing metadata from the session snapshot, and post back to GitHub. This keeps the example fully serverless: Cloudflare handles the HTTP request, and OpenComputer owns the durable session state.
+When OpenComputer calls back through a [webhook destination](https://docs.opencomputer.dev/agent-sessions/webhooks), fetch the durable result, read the routing metadata from the session snapshot, and post back to GitHub. This keeps the example fully serverless: Cloudflare handles the HTTP request, and OpenComputer owns the durable session state.
 
 ```ts
 app.post("/webhooks/opencomputer", async (c) => {
@@ -225,10 +226,10 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 
 ## Production Notes
 
-- OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
+- [OpenComputer session execution](https://docs.opencomputer.dev/agent-sessions/sessions) is durable and completion is callback-driven through [webhooks](https://docs.opencomputer.dev/agent-sessions/webhooks). This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
 - That metadata handoff is what makes the app fully serverless: GitHub webhook request state, OpenComputer completion routing, and final PR update routing all survive without local process state.
 - For simplicity, the GitHub webhook handler awaits only the setup work needed to create the OpenComputer session and post the running comment. If that setup can approach GitHub's webhook timeout in production, move it behind a queue or serverless `waitUntil` equivalent.
-- `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts.
+- `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts. See the OpenComputer [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.
 
