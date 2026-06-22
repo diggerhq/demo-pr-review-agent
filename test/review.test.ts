@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseReviewCommand, parseReviewSessionKey, reviewSessionKey } from "../src/review.js";
+import { parseReviewCommand, parseReviewSessionMetadata, reviewSessionMetadata } from "../src/review.js";
 
 test("parseReviewCommand accepts exact command and whitespace-delimited instructions", () => {
   assert.deepEqual(parseReviewCommand("/oc-review", "/oc-review"), {
@@ -24,8 +24,8 @@ test("parseReviewCommand rejects prefix collisions", () => {
   });
 });
 
-test("reviewSessionKey round-trips callback routing data", () => {
-  const key = reviewSessionKey({
+test("reviewSessionMetadata captures callback routing data", () => {
+  const metadata = reviewSessionMetadata({
     delivery: "delivery:123",
     repository: {
       name: "widgets",
@@ -38,17 +38,32 @@ test("reviewSessionKey round-trips callback routing data", () => {
     },
   });
 
-  assert.deepEqual(parseReviewSessionKey(key), {
+  assert.deepEqual(parseReviewSessionMetadata(metadata), {
+    source: "github-pr-review",
     owner: "acme",
     repo: "widgets",
     pullNumber: 42,
     headSha: "abc123",
-    delivery: "delivery:123",
+    deliveryId: "delivery:123",
   });
 });
 
-test("parseReviewSessionKey rejects unrelated or malformed keys", () => {
-  assert.equal(parseReviewSessionKey("github:acme/widgets:pull:42"), null);
-  assert.equal(parseReviewSessionKey("github-pr:v1:acme:widgets:nope:abc123:delivery"), null);
-  assert.equal(parseReviewSessionKey("github-pr:v1:%:widgets:42:abc123:delivery"), null);
+test("parseReviewSessionMetadata rejects unrelated or malformed metadata", () => {
+  assert.equal(parseReviewSessionMetadata({ source: "other" }), null);
+  assert.equal(parseReviewSessionMetadata({
+    source: "github-pr-review",
+    owner: "acme",
+    repo: "widgets",
+    pullNumber: "42",
+    headSha: "abc123",
+    deliveryId: "delivery",
+  }), null);
+  assert.equal(parseReviewSessionMetadata({
+    source: "github-pr-review",
+    owner: "",
+    repo: "widgets",
+    pullNumber: 42,
+    headSha: "abc123",
+    deliveryId: "delivery",
+  }), null);
 });

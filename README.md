@@ -67,7 +67,14 @@ At runtime, each PR starts a durable session against that existing agent. The re
 const session = await oc.sessions.create({
   agent: process.env.OPENCOMPUTER_AGENT_ID!,
   input: buildReviewTask({ repository, pullRequest, files, diff }),
-  key: reviewSessionKey({ owner, repo, pullNumber, headSha, deliveryId }),
+  metadata: {
+    source: "github-pr-review",
+    owner,
+    repo,
+    pullNumber,
+    headSha,
+    deliveryId,
+  },
   idempotencyKey: deliveryId,
   destinations: [{
     url: `${PUBLIC_URL}/webhooks/opencomputer?token=${token}`,
@@ -82,7 +89,7 @@ await github.upsertStickyIssueComment({
 });
 ```
 
-When OpenComputer calls back, fetch the durable result, read the routing key from the session snapshot, and post back to GitHub. This keeps the example stateless between GitHub and OpenComputer webhooks.
+When OpenComputer calls back, fetch the durable result, read the routing metadata from the session snapshot, and post back to GitHub. This keeps the example stateless between GitHub and OpenComputer webhooks.
 
 ```ts
 app.post("/webhooks/opencomputer", async (c) => {
@@ -90,7 +97,7 @@ app.post("/webhooks/opencomputer", async (c) => {
 
   const { sessionId } = await c.req.json();
   const session = await oc.sessions.get(sessionId);
-  const route = parseReviewKey(session.snapshot.key);
+  const route = parseReviewMetadata(session.snapshot.metadata);
   const result = await session.result();
 
   const token = await github.installationTokenForRepository(route);
@@ -205,8 +212,8 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 
 ## Production Notes
 
-- OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in the session `key` so it does not need a database.
-- A first-class OpenComputer `metadata` or `callbackContext` field would be cleaner than overloading `key`; the desired API shape is captured in [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md).
+- OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
+- The current `@opencomputer/sdk@0.7.1` runtime passes `metadata` through, but its TypeScript declarations do not expose metadata yet. The follow-up is captured in [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md).
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.
 

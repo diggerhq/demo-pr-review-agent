@@ -183,3 +183,11 @@ I removed the local [src/store.ts](src/store.ts) runtime store and its dependenc
 > User: "well not all links - just the ones user may actually want to click"
 
 I shortened the top of [README.md](README.md) so the live-test flow focuses on installing the GitHub App, opening or updating a PR, watching the sticky review comment, and rerunning with `/oc-review`. I converted only likely click targets into Markdown links: the live app, GitHub App, verified demo PR, install page, and manifest setup page. Command-oriented URLs remain in commands or inline literals.
+
+> User: "now metadata is supported (docs just deployed, refresh) - i guess best to update our example to use appropriate apis"
+
+I refreshed the OpenComputer Sessions docs and verified the API by creating a small session with `metadata`, then fetching it back from `oc.sessions.get(sessionId)`. I updated [src/review.ts](src/review.ts) so new sessions use OpenComputer session `metadata` for GitHub callback routing instead of encoding routing data into `session.key`. I also updated [README.md](README.md), [opencomputer-dx-notes.md](opencomputer-dx-notes.md), [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md), and [test/review.test.ts](test/review.test.ts) to reflect the metadata flow.
+
+> User: "ouch it looks like SDK wasnt updated. or was there nothing to expect in SDK surface from your pov?"
+
+I confirmed that I would expect SDK surface changes: at minimum `metadata?: Record<string, unknown>` on `CreateSessionParams` and `SessionData`, ideally with generic metadata typing. `@opencomputer/sdk@0.7.1` still omits those declarations even though its runtime serializer passes metadata through, so the repo currently uses a narrow local intersection type for create and a narrow cast around `session.snapshot.metadata`.

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { Session } from "@opencomputer/sdk";
 import { buildReviewTask, limitCommentBody } from "./prompts.js";
 import type {
@@ -11,9 +10,11 @@ import type {
 export const REVIEW_COMMENT_MARKER = "<!-- opencomputer-pr-review -->";
 
 const PULL_REQUEST_ACTIONS = new Set(["opened", "reopened", "synchronize", "ready_for_review"]);
-const REVIEW_SESSION_KEY_PREFIX = "github-pr:v1";
+const REVIEW_METADATA_SOURCE = "github-pr-review";
 
 type SessionResult = Awaited<ReturnType<Session["result"]>>;
+type CreateSessionParams = Parameters<ReviewServiceDeps["openComputer"]["sessions"]["create"]>[0];
+type CreateSessionWithMetadataParams = CreateSessionParams & { metadata: ReviewSessionMetadata };
 
 interface ReviewCommand {
   matched: boolean;
@@ -27,7 +28,7 @@ interface WebhookContext {
 }
 
 interface QueuedReviewJob {
-  delivery?: string;
+  delivery: string;
   installationId?: number;
   repository: GitHubRepository;
   pullRequest: GitHubPullRequest;
@@ -36,16 +37,17 @@ interface QueuedReviewJob {
   installationToken?: string;
 }
 
-interface ReviewSessionRoute {
+interface ReviewSessionMetadata {
+  source: typeof REVIEW_METADATA_SOURCE;
   owner: string;
   repo: string;
   pullNumber: number;
   headSha: string;
-  delivery: string;
+  deliveryId: string;
 }
 
 interface ManualReviewJob {
-  delivery?: string;
+  delivery: string;
   installationId?: number;
   repository: GitHubRepository;
   pullNumber: number;
@@ -86,71 +88,50 @@ function shortSha(sha = ""): string {
   return sha ? sha.slice(0, 12) : "unknown";
 }
 
-function keyPart(value: string | number | undefined): string {
-  return encodeURIComponent(String(value || ""));
-}
-
-function decodeKeyPart(value: string | undefined): string | null {
-  try {
-    return decodeURIComponent(value || "");
-  } catch {
-    return null;
-  }
-}
-
-export function reviewSessionKey({
+export function reviewSessionMetadata({
   delivery,
   repository,
   pullRequest,
-}: Pick<QueuedReviewJob, "delivery" | "repository" | "pullRequest">): string {
-  const route: ReviewSessionRoute = {
+}: Pick<QueuedReviewJob, "delivery" | "repository" | "pullRequest">): ReviewSessionMetadata {
+  return {
+    source: REVIEW_METADATA_SOURCE,
     owner: repository.owner.login,
     repo: repository.name,
     pullNumber: pullRequest.number,
     headSha: pullRequest.head?.sha || "",
-    delivery: delivery || `local-${randomUUID()}`,
+    deliveryId: delivery,
   };
-
-  return [
-    REVIEW_SESSION_KEY_PREFIX,
-    keyPart(route.owner),
-    keyPart(route.repo),
-    keyPart(route.pullNumber),
-    keyPart(route.headSha),
-    keyPart(route.delivery),
-  ].join(":");
 }
 
-export function parseReviewSessionKey(key: string | undefined): ReviewSessionRoute | null {
-  if (!key) {
+export function parseReviewSessionMetadata(value: unknown): ReviewSessionMetadata | null {
+  const metadata = objectValue(value);
+  if (metadata.source !== REVIEW_METADATA_SOURCE) {
     return null;
   }
 
-  const [namespace, version, owner, repo, pullNumber, headSha, delivery] = key.split(":");
-  if (`${namespace}:${version}` !== REVIEW_SESSION_KEY_PREFIX) {
+  if (
+    typeof metadata.owner !== "string"
+    || typeof metadata.repo !== "string"
+    || typeof metadata.headSha !== "string"
+    || typeof metadata.deliveryId !== "string"
+    || typeof metadata.pullNumber !== "number"
+    || !Number.isInteger(metadata.pullNumber)
+    || metadata.pullNumber <= 0
+  ) {
     return null;
   }
 
-  const decodedPullNumber = decodeKeyPart(pullNumber);
-  const parsedPullNumber = Number.parseInt(decodedPullNumber || "", 10);
-  if (!Number.isInteger(parsedPullNumber) || parsedPullNumber <= 0) {
-    return null;
-  }
-
-  const decodedOwner = decodeKeyPart(owner);
-  const decodedRepo = decodeKeyPart(repo);
-  const decodedHeadSha = decodeKeyPart(headSha);
-  const decodedDelivery = decodeKeyPart(delivery);
-  if (!decodedOwner || !decodedRepo || decodedHeadSha === null || decodedDelivery === null) {
+  if (!metadata.owner || !metadata.repo || !metadata.deliveryId) {
     return null;
   }
 
   return {
-    owner: decodedOwner,
-    repo: decodedRepo,
-    pullNumber: parsedPullNumber,
-    headSha: decodedHeadSha,
-    delivery: decodedDelivery,
+    source: REVIEW_METADATA_SOURCE,
+    owner: metadata.owner,
+    repo: metadata.repo,
+    pullNumber: metadata.pullNumber,
+    headSha: metadata.headSha,
+    deliveryId: metadata.deliveryId,
   };
 }
 
@@ -386,6 +367,10 @@ export class ReviewService {
   }
 
   handlePullRequestWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
+    if (!delivery) {
+      return { accepted: false, reason: "ignored GitHub webhook without delivery id" };
+    }
+
     if (!PULL_REQUEST_ACTIONS.has(payload.action || "")) {
       return { accepted: false, reason: `ignored pull_request action ${payload.action}` };
     }
@@ -410,6 +395,10 @@ export class ReviewService {
   }
 
   handleIssueCommentWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
+    if (!delivery) {
+      return { accepted: false, reason: "ignored GitHub webhook without delivery id" };
+    }
+
     if (payload.action !== "created") {
       return { accepted: false, reason: `ignored issue_comment action ${payload.action}` };
     }
@@ -565,10 +554,10 @@ export class ReviewService {
         pullNumber,
         agentId,
       });
-      const session = await this.openComputer.sessions.create({
+      const createSessionParams: CreateSessionWithMetadataParams = {
         agent: agentId,
         input,
-        key: reviewSessionKey({ delivery, repository, pullRequest }),
+        metadata: reviewSessionMetadata({ delivery, repository, pullRequest }),
         limits: this.config.openComputer.limits,
         idempotencyKey: delivery,
         destinations: [
@@ -580,7 +569,8 @@ export class ReviewService {
             enabled: true,
           },
         ],
-      });
+      };
+      const session = await this.openComputer.sessions.create(createSessionParams);
       const sessionId = session.id;
       console.info("review opencomputer session created", {
         delivery,
@@ -650,9 +640,9 @@ export class ReviewService {
 
   async completeReviewFromSession(sessionId: string): Promise<{ accepted: boolean; reason: string }> {
     const session = await this.openComputer.sessions.get(sessionId);
-    const route = parseReviewSessionKey(session.snapshot.key);
-    if (!route) {
-      return { accepted: false, reason: `ignored OpenComputer session ${sessionId} without review routing key` };
+    const metadata = parseReviewSessionMetadata((session.snapshot as Session["snapshot"] & { metadata?: unknown }).metadata);
+    if (!metadata) {
+      return { accepted: false, reason: `ignored OpenComputer session ${sessionId} without review metadata` };
     }
 
     const result = await session.result();
@@ -661,7 +651,7 @@ export class ReviewService {
       return { accepted: true, reason: `OpenComputer session ${sessionId} is not complete yet` };
     }
 
-    const { owner, repo, pullNumber } = route;
+    const { owner, repo, pullNumber } = metadata;
     const repository: GitHubRepository = {
       name: repo,
       full_name: `${owner}/${repo}`,
@@ -669,12 +659,12 @@ export class ReviewService {
     };
     const token = await this.github.installationTokenForRepository({ owner, repo });
     const pullRequest = await this.github.getPullRequest({ token, owner, repo, pullNumber });
-    if (route.headSha && pullRequest.head?.sha && route.headSha !== pullRequest.head.sha) {
+    if (metadata.headSha && pullRequest.head?.sha && metadata.headSha !== pullRequest.head.sha) {
       console.info("ignored stale opencomputer review", {
         repository: repository.full_name,
         pullNumber,
         sessionId,
-        sessionHeadSha: route.headSha,
+        sessionHeadSha: metadata.headSha,
         currentHeadSha: pullRequest.head.sha,
       });
 
@@ -715,7 +705,7 @@ export class ReviewService {
       repository: repository.full_name,
       pullNumber,
       sessionId,
-      delivery: route.delivery,
+      delivery: metadata.deliveryId,
       yieldReason,
     });
 
