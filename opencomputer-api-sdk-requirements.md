@@ -36,18 +36,19 @@ const result = await session.result();
 
 This removes the previous workaround where the example encoded routing state into `session.key`.
 
-## Remaining SDK Work
+## SDK Metadata Status
 
-The wire API accepts and returns metadata, and `@opencomputer/sdk@0.7.1` passes `metadata` through at runtime. The TypeScript declarations have not caught up yet.
-
-Expected SDK surface:
+The wire API accepts and returns metadata, and `@opencomputer/sdk@0.7.2` exposes the basic metadata surface in TypeScript:
 
 - `CreateSessionParams.metadata?: Record<string, unknown>`
-- `SessionData.metadata?: Record<string, unknown>`
-- Optional generic typing, for example `CreateSessionParams<TMetadata>` and `SessionData<TMetadata>`, so apps can avoid repetitive casts.
-- If destination delivery payloads include metadata directly, publish and type that webhook envelope too.
+- `SessionData.metadata?: Record<string, unknown> | null`
 
-Until those types exist, this repo uses a narrow local intersection type for `sessions.create(...)` and a narrow cast around `session.snapshot.metadata`.
+This repo no longer needs a local session-create intersection type or a cast around `session.snapshot.metadata`.
+
+Potential future type polish:
+
+- Optional generic typing, for example `CreateSessionParams<TMetadata>` and `SessionData<TMetadata>`, so apps can type their own metadata shape once.
+- If destination delivery payloads include metadata directly, publish and type that webhook envelope too.
 
 ## Webhook Signing
 

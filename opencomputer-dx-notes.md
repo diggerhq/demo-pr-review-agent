@@ -10,6 +10,7 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - The append-only event model with `seq`, `type`, and `yield_reason` is a good fit for resumable background work.
 - The `@opencomputer/sdk` TypeScript types expose a clean Durable Agent Sessions surface: `OpenComputer`, `agents.create`, `sessions.create`, and `session.result()`.
 - The SDK's camelCase request/response shape is nicer in application code than raw REST snake_case, especially for `limits.turnSeconds`, `lastTurn`, and `yieldReason`.
+- `@opencomputer/sdk@0.7.2` now exposes session metadata on both `CreateSessionParams` and `SessionData`, so the PR reviewer can use `metadata` without local type casts.
 
 ## Potential Improvements
 
@@ -19,7 +20,7 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Offer a structured-output pattern for final results. PR review agents benefit from returning machine-readable findings plus Markdown, but the docs currently emphasize event text and final result events.
 - Include a Durable Agent Sessions example for GitHub App or CI-review workflows. This integration pattern raises concrete questions about payload size, diff truncation, result posting, and webhook retries.
 - Clarify recommended production patterns for long-running session completion, with OpenComputer destinations/webhooks as the default server-side pattern.
-- Update the TypeScript SDK declarations for session metadata. The API accepts and returns metadata, and the SDK runtime passes it through, but `@opencomputer/sdk@0.7.1` still omits `metadata` from `CreateSessionParams` and `SessionData`.
+- Keep SDK releases tightly synced with docs/API rollouts. During this build, the metadata API/docs were available before the TypeScript declarations, which briefly forced app-side type workarounds.
 - Keep `key` guidance separate from callback-routing guidance. `key` has get-or-create semantics; metadata is now the right place for opaque app state.
 - First-class artifacts for patches, file annotations, and review reports would make PR review integrations cleaner once the artifacts API lands.
 - Make the npm README for `@opencomputer/sdk` lead with, or at least prominently include, the Durable Agent Sessions API. The current package README is sandbox-first, even though the same package is the right SDK for `OpenComputer` sessions.
@@ -50,7 +51,7 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Once the installation permission update was accepted, redelivering the existing `/oc-review` webhook was enough to complete the end-to-end flow. This is a useful recovery/debug path for setup issues: fix permissions, redeliver, then inspect the sticky PR comment and session ID.
 - README and deployment docs can drift during iterative prototyping. The repo had an early alternate-host blueprint and provider-specific URL fallback left over after Fly became the real deployment target; active docs and code now point at Fly only.
 - The REST API was simple enough that a no-dependency client wrapper was faster than introducing the SDK for this prototype. SDK adoption would be more compelling with an official server-side PR-review example, documented retry/idempotency behavior, typed result/event helpers, and a clear "use SDK vs raw HTTP" decision guide.
-- The refactor to `@opencomputer/sdk@0.7.1` removed the local OpenComputer HTTP wrapper cleanly. The SDK already handles auth, retries for safe/idempotent calls, JSON normalization, and typed session handles.
+- The refactor to `@opencomputer/sdk` removed the local OpenComputer HTTP wrapper cleanly. The SDK already handles auth, retries for safe/idempotent calls, JSON normalization, and typed session handles.
 - SDK examples should show the durable-session callback pattern directly: bootstrap an agent, create a session with `idempotencyKey` and a destination, then fetch `session.result()` from the completion webhook.
 - OpenComputer examples should foreground the small set of SDK calls and app responsibilities before diving into deployment or provider glue. For this PR-review app, the important reader takeaway is: webhook arrives, fetch context, `oc.sessions.create(...)` with a destination, OpenComputer calls back, post the result.
 - The better production-shaped pattern is OpenComputer destinations/webhooks, not polling. The SDK exposes `sessions.create({ destinations })` and `session.destinations.create({ secret })`, but examples should make this the default for background jobs.
@@ -58,5 +59,5 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Signed destination verification needs clearer documentation. The SDK types expose `secret` for destination creation, but the expected request signature headers and verification algorithm were not discoverable from the package README/types, so this demo currently uses a callback token in the destination URL.
 - Reusing the same session `key` with a changed request produced `create key already used with a different request`. That behavior is understandable for get-or-create semantics and reinforced why callback routing should use metadata instead of `key`.
 - Session metadata is now supported by the API. A wire check created a session with metadata and confirmed the same metadata came back from `oc.sessions.get(sessionId)`.
-- The `@opencomputer/sdk@0.7.1` runtime already serializes `metadata` correctly because the normalizer treats `metadata` as an opaque subtree, but the TypeScript declarations still omit it. This creates a weird new-user experience: the docs/API support the feature, but typed app code needs a local extension or cast.
+- `@opencomputer/sdk@0.7.2` now types session metadata directly, removing the local intersection type and `session.snapshot.metadata` cast from the app.
 - `llms.txt` listed `.md` docs URLs for the refreshed session docs, but direct `curl` requests to those `.md` URLs returned `404`; the non-`.md` HTML route worked.

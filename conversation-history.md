@@ -191,3 +191,7 @@ I refreshed the OpenComputer Sessions docs and verified the API by creating a sm
 > User: "ouch it looks like SDK wasnt updated. or was there nothing to expect in SDK surface from your pov?"
 
 I confirmed that I would expect SDK surface changes: at minimum `metadata?: Record<string, unknown>` on `CreateSessionParams` and `SessionData`, ideally with generic metadata typing. `@opencomputer/sdk@0.7.1` still omits those declarations even though its runtime serializer passes metadata through, so the repo currently uses a narrow local intersection type for create and a narrow cast around `session.snapshot.metadata`.
+
+> User: "ok we forgot to update the sdk - now fixed - anything would change in the examples with this in mind?"
+
+I upgraded the repo to `@opencomputer/sdk@0.7.2`, confirmed the new declarations include `CreateSessionParams.metadata` and `SessionData.metadata`, and simplified [src/review.ts](src/review.ts) by removing the temporary session-create intersection type and `session.snapshot.metadata` cast. I also updated [README.md](README.md), [opencomputer-dx-notes.md](opencomputer-dx-notes.md), and [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md) to say the basic SDK metadata surface is now typed.

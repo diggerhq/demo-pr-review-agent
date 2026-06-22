@@ -13,8 +13,6 @@ const PULL_REQUEST_ACTIONS = new Set(["opened", "reopened", "synchronize", "read
 const REVIEW_METADATA_SOURCE = "github-pr-review";
 
 type SessionResult = Awaited<ReturnType<Session["result"]>>;
-type CreateSessionParams = Parameters<ReviewServiceDeps["openComputer"]["sessions"]["create"]>[0];
-type CreateSessionWithMetadataParams = CreateSessionParams & { metadata: ReviewSessionMetadata };
 
 interface ReviewCommand {
   matched: boolean;
@@ -37,7 +35,7 @@ interface QueuedReviewJob {
   installationToken?: string;
 }
 
-interface ReviewSessionMetadata {
+interface ReviewSessionMetadata extends Record<string, unknown> {
   source: typeof REVIEW_METADATA_SOURCE;
   owner: string;
   repo: string;
@@ -554,7 +552,7 @@ export class ReviewService {
         pullNumber,
         agentId,
       });
-      const createSessionParams: CreateSessionWithMetadataParams = {
+      const session = await this.openComputer.sessions.create({
         agent: agentId,
         input,
         metadata: reviewSessionMetadata({ delivery, repository, pullRequest }),
@@ -569,8 +567,7 @@ export class ReviewService {
             enabled: true,
           },
         ],
-      };
-      const session = await this.openComputer.sessions.create(createSessionParams);
+      });
       const sessionId = session.id;
       console.info("review opencomputer session created", {
         delivery,
@@ -640,7 +637,7 @@ export class ReviewService {
 
   async completeReviewFromSession(sessionId: string): Promise<{ accepted: boolean; reason: string }> {
     const session = await this.openComputer.sessions.get(sessionId);
-    const metadata = parseReviewSessionMetadata((session.snapshot as Session["snapshot"] & { metadata?: unknown }).metadata);
+    const metadata = parseReviewSessionMetadata(session.snapshot.metadata);
     if (!metadata) {
       return { accepted: false, reason: `ignored OpenComputer session ${sessionId} without review metadata` };
     }

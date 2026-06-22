@@ -213,7 +213,7 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 ## Production Notes
 
 - OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
-- The current `@opencomputer/sdk@0.7.1` runtime passes `metadata` through, but its TypeScript declarations do not expose metadata yet. The follow-up is captured in [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md).
+- `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts.
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.
 

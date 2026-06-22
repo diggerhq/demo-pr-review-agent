@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.6",
-    "@opencomputer/sdk": "^0.7.1",
+    "@opencomputer/sdk": "^0.7.2",
     "hono": "^4.12.26"
   },
   "devDependencies": {
