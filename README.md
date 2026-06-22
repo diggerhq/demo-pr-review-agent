@@ -163,12 +163,27 @@ Set all required secrets in the host dashboard, then configure the GitHub App we
 - The review comment is intentionally Markdown-only for now. Checks annotations and line comments are future improvements.
 - GitHub App setup can start from `/setup/github-app`, which posts a preconfigured GitHub App manifest to GitHub.
 
+## Current Deployment
+
+- Public URL: `https://oc-pr-review-agent-digger-test0.fly.dev`
+- Health: `https://oc-pr-review-agent-digger-test0.fly.dev/healthz`
+- GitHub App setup: `https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app`
+- Manifest JSON: `https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app/manifest`
+- Current status: deployed and publicly reachable, but `configured: false` until runtime secrets are set.
+
 ## Verification
 
 Current local checks:
 
-- `npm test`: 9 passing tests.
+- `npm test`: 11 passing tests.
 - `npm run lint`: Node syntax checks passed.
+
+Current deployment checks:
+
+- Fly machine `784459b274dd78` is `started`.
+- `/` returns HTTP 200.
+- `/healthz` returns HTTP 200 with missing runtime secrets listed.
+- `/setup/github-app/manifest` returns the expected GitHub App manifest.
 
 ## Tracking Docs
 
