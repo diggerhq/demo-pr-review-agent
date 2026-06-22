@@ -133,7 +133,9 @@ The rest is provider-specific glue:
 
 - [src/github.ts](src/github.ts) signs GitHub App JWTs, fetches PR data, and writes comments.
 - [src/prompts.ts](src/prompts.ts) turns GitHub PR context into the agent task.
-- [src/server.ts](src/server.ts) wires config, Hono, GitHub, and OpenComputer together.
+- [src/runtime.ts](src/runtime.ts) wires config, Hono, GitHub, and OpenComputer together.
+- [src/worker.ts](src/worker.ts) is the thin Cloudflare Worker adapter.
+- [src/server.ts](src/server.ts) is the Node/Fly adapter.
 
 ## Configure
 
@@ -186,7 +188,38 @@ PUBLIC_URL/webhooks/github
 
 ## Deploy
 
-Fly.io is the current deployment target for this repo.
+Cloudflare Workers is the recommended deploy target for this example. The app core stays runtime-neutral; the Worker entrypoint only reads `env`, builds the shared runtime, and calls Hono's Fetch handler.
+
+```bash
+npm run worker:deploy
+```
+
+Set Worker secrets with Wrangler:
+
+```bash
+wrangler secret put GITHUB_APP_ID
+wrangler secret put GITHUB_CLIENT_ID
+wrangler secret put GITHUB_PRIVATE_KEY_BASE64
+wrangler secret put GITHUB_WEBHOOK_SECRET
+wrangler secret put OPENCOMPUTER_API_KEY
+wrangler secret put OPENCOMPUTER_AGENT_ID
+wrangler secret put OPENCOMPUTER_WEBHOOK_TOKEN
+wrangler secret put ANTHROPIC_API_KEY
+```
+
+[wrangler.toml](wrangler.toml) contains non-secret defaults and enables `nodejs_compat` so the GitHub App signing code can keep using `node:crypto`. After deploy, set `PUBLIC_URL` in `wrangler.toml` to the deployed Worker URL and update the GitHub App webhook URL to:
+
+```text
+PUBLIC_URL/webhooks/github
+```
+
+For local Worker testing:
+
+```bash
+npm run worker:dev
+```
+
+Fly.io remains a supported Node/container deploy path.
 
 ```bash
 flyctl deploy

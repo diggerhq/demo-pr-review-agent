@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import type { AppConfig } from "./types.js";
 
 type Env = Record<string, string | undefined>;

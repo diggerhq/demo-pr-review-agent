@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { Hono } from "hono";
 import { missingRequiredConfig, webhookUrl } from "./config.js";
 import { verifyGitHubSignature } from "./security.js";

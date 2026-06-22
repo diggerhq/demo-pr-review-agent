@@ -12,6 +12,8 @@
     "bootstrap:agent": "tsx scripts/bootstrap-opencomputer-agent.ts",
     "start": "node dist/src/server.js",
     "dev": "tsx watch src/server.ts",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy",
     "test": "node --import tsx --test test/*.test.ts",
     "lint": "tsc --noEmit"
   },
@@ -23,6 +25,7 @@
   "devDependencies": {
     "@types/node": "^26.0.0",
     "tsx": "^4.22.4",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "wrangler": "^4.103.0"
   }
 }

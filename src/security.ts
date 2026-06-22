@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { createHmac, createSign, timingSafeEqual } from "node:crypto";
 
 export function verifyGitHubSignature(secret: string, payload: Buffer, signatureHeader: string | undefined): boolean {

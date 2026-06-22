@@ -1,0 +1,19 @@
+name = "oc-pr-review-agent-digger-test0"
+main = "src/worker.ts"
+compatibility_date = "2026-06-22"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+PUBLIC_URL = "https://oc-pr-review-agent-digger-test0.<your-subdomain>.workers.dev"
+WEBHOOK_PATH = "/webhooks/github"
+OPENCOMPUTER_BASE_URL = "https://api.opencomputer.dev/v3"
+OPENCOMPUTER_WEBHOOK_PATH = "/webhooks/opencomputer"
+OPENCOMPUTER_AGENT_NAME = "opencomputer-pr-reviewer"
+OPENCOMPUTER_AGENT_MODEL = "anthropic/claude-opus-4-8"
+OPENCOMPUTER_LIMIT_TURNS = "1"
+OPENCOMPUTER_LIMIT_TURN_SECONDS = "600"
+OPENCOMPUTER_LIMIT_TOKENS = "120000"
+REVIEW_COMMAND_PREFIX = "/oc-review"
+REVIEW_DRAFT_PRS = "false"
+REVIEW_MAX_DIFF_CHARS = "60000"
+REVIEW_COMMENT_MAX_CHARS = "62000"
