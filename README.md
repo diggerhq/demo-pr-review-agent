@@ -35,8 +35,19 @@ End-to-end PR review test:
 1. Install the GitHub App:
    `https://github.com/apps/0x-test-pr-reviewer/installations/new`
 2. Select a test repository.
-3. Open a PR in that repo, or use an existing open PR.
-4. Comment on the PR:
+3. Open a new non-draft PR in that repo.
+
+Expected behavior:
+
+- The app receives the `pull_request.opened` webhook.
+- It posts or updates a sticky PR comment titled `OpenComputer PR Review`.
+- The comment first shows queued/running progress.
+- The comment updates with the OpenComputer review result when the durable session completes.
+
+Manual re-run test:
+
+1. Use an existing open PR.
+2. Comment on the PR:
 
 ```text
 /oc-review
@@ -46,7 +57,7 @@ Expected behavior:
 
 - The app receives the `issue_comment` webhook.
 - It posts or updates a sticky PR comment titled `OpenComputer PR Review`.
-- The comment first says the review is running.
+- The comment first shows queued/running progress.
 - The comment updates with the OpenComputer review result when the durable session completes.
 
 The GitHub App must have **Pull requests: read and write**. GitHub can reject PR conversation comments with `403 Resource not accessible by integration` when the app has `Issues: write` but only `Pull requests: read`.
@@ -78,6 +89,53 @@ Runtime logs:
 ```bash
 flyctl logs --app oc-pr-review-agent-digger-test0
 ```
+
+## How It Works End To End
+
+Moving parts:
+
+- **GitHub App**: installed on repositories and subscribed to pull request and issue comment events.
+- **Fly web service**: public Node HTTP service at `https://oc-pr-review-agent-digger-test0.fly.dev`.
+- **GitHub API**: used to authenticate as the app installation, fetch PR metadata/diffs, and write sticky PR comments.
+- **OpenComputer Durable Agent Sessions**: runs the actual review as a durable background agent session.
+- **Anthropic key**: supplied to OpenComputer as the model credential for the managed Claude runtime.
+- **Sticky PR comment**: the user-facing progress and final result surface.
+
+Webhook flow:
+
+1. GitHub sends a signed webhook to `POST /webhooks/github`.
+2. The service verifies `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`.
+3. If the event is relevant, the service returns HTTP 202 quickly and starts async review work in the Node process.
+4. Automatic triggers are `pull_request.opened`, `pull_request.reopened`, `pull_request.synchronize`, and `pull_request.ready_for_review`.
+5. Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`.
+6. Manual trigger is a PR comment starting with `/oc-review`.
+
+Review job flow:
+
+1. The service signs a GitHub App JWT with `GITHUB_PRIVATE_KEY_BASE64`.
+2. It exchanges the JWT for a repository installation token.
+3. It immediately creates or updates a sticky `OpenComputer PR Review` comment with `queued` progress.
+4. It fetches changed file metadata and the unified PR diff from GitHub.
+5. It ensures an OpenComputer agent exists with the PR-review prompt, model, and limits.
+6. It starts an OpenComputer session keyed by repo, PR number, and head SHA.
+7. It updates the sticky PR comment to show the OpenComputer session is running.
+8. It polls `GET /sessions/:id/result` until the durable session completes or times out.
+9. It updates the same sticky PR comment with the final review, or with an error if something failed.
+
+OpenComputer input shape:
+
+- Repository, PR number, URL, author, base/head refs and SHAs.
+- PR body, treated as untrusted content.
+- Changed file summary.
+- Unified diff, truncated by `REVIEW_MAX_DIFF_CHARS` if needed.
+- Optional trusted manual instruction supplied after `/oc-review`.
+
+Operational caveats:
+
+- The OpenComputer session is durable, but this first service uses an in-process async job after returning HTTP 202. If the Fly machine restarts mid-job before the session is created, that job can be lost.
+- `data/reviews.jsonl` is local process/container state, useful for development but not a durable production audit log.
+- A production version should use a real queue and/or OpenComputer destinations/webhooks for completion handling.
+- The GitHub App installation must have **Pull requests: write** as well as **Issues: write** so it can post PR conversation comments.
 
 ## What It Does
 

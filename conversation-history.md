@@ -119,3 +119,11 @@ I rechecked the GitHub App registration and the `diggerhq/test-durable-0` instal
 > User: "ah i forgot to reinstall accept permissions. done now"
 
 I rechecked the installation permissions and confirmed `pull_requests: write` was now present on the installation token. I redelivered the original `/oc-review` webhook delivery `3827158249558245376`; GitHub accepted the redelivery with `202`. The deployed app posted a sticky `OpenComputer PR Review` comment on PR #1 and updated it with a completed review from OpenComputer session `ses_8ab1c4c27a494fd2a5770365`.
+
+> User: "will it also now trigger on new PRs?"
+
+I confirmed that [src/review.js](src/review.js) auto-handles `pull_request.opened`, `reopened`, `synchronize`, and `ready_for_review` for non-draft PRs. I updated [README.md](README.md) so the live test flow explicitly starts with opening a new non-draft PR, with `/oc-review` documented as a manual re-run path.
+
+> User: "also tell me how it works now end to end; does readme spell it out clearly? what are the moving parts, what goes on under the hood, etc etc - if not update"
+
+I expanded [README.md](README.md) with a front-loaded end-to-end explanation covering the GitHub App, Fly webhook service, GitHub API calls, OpenComputer Durable Agent Sessions, sticky PR comments, trigger behavior, review-job flow, OpenComputer input shape, and operational caveats.
