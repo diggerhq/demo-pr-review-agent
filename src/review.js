@@ -56,27 +56,37 @@ function resultText(result) {
   return "";
 }
 
-function reviewHeading({ repository, pullRequest, sessionId, yieldReason }) {
+function reviewHeading({ repository, pullRequest, sessionId = "", status }) {
+  const sessionLine = sessionId ? `- Session: \`${sessionId}\`\n` : "";
+
   return `${REVIEW_COMMENT_MARKER}
 ## OpenComputer PR Review
 
 - Repository: \`${repository.full_name}\`
 - PR: #${pullRequest.number}
 - Commit: \`${shortSha(pullRequest.head?.sha)}\`
-- Session: \`${sessionId}\`
-- Status: \`${yieldReason}\`
+- Status: \`${status}\`
+${sessionLine}
 `;
 }
 
+function progressComment({ repository, pullRequest, status, detail, trigger = "", sessionId = "", maxChars }) {
+  const triggerLine = trigger ? `- Trigger: ${trigger}\n` : "";
+  const body = `${reviewHeading({ repository, pullRequest, sessionId, status })}${triggerLine}
+${detail}`;
+
+  return limitCommentBody(body, maxChars);
+}
+
 function runningComment({ repository, pullRequest, sessionId, trigger }) {
-  return `${reviewHeading({ repository, pullRequest, sessionId, yieldReason: "running" })}
+  return `${reviewHeading({ repository, pullRequest, sessionId, status: "running" })}
 - Trigger: ${trigger}
 
 Review is running in an OpenComputer durable agent session. This comment will update when the session completes.`;
 }
 
 function finalComment({ repository, pullRequest, sessionId, yieldReason, markdown, maxChars }) {
-  const body = `${reviewHeading({ repository, pullRequest, sessionId, yieldReason })}
+  const body = `${reviewHeading({ repository, pullRequest, sessionId, status: yieldReason })}
 ${markdown || "The session completed without a user-facing review message."}`;
 
   return limitCommentBody(body, maxChars);
@@ -110,6 +120,14 @@ export class ReviewService {
   }
 
   handleWebhook({ event, delivery, payload }) {
+    this.logger.info("received webhook", {
+      delivery,
+      event,
+      action: payload?.action,
+      repository: payload?.repository?.full_name,
+      pullNumber: payload?.pull_request?.number || payload?.issue?.number,
+    });
+
     if (event === "ping") {
       this.logger.info("received github ping", { delivery });
       return { accepted: true, reason: "ping" };
@@ -233,14 +251,68 @@ export class ReviewService {
       pullNumber,
       headSha: pullRequest.head?.sha,
     });
+    this.logger.info("review started", {
+      delivery,
+      trigger,
+      repository: repository.full_name,
+      pullNumber,
+      headSha: pullRequest.head?.sha,
+    });
 
     try {
       token ||= await this.github.installationToken(installationId);
+      await this.github.upsertStickyIssueComment({
+        token,
+        owner,
+        repo,
+        issueNumber: pullNumber,
+        marker: REVIEW_COMMENT_MARKER,
+        body: progressComment({
+          repository,
+          pullRequest,
+          status: "queued",
+          trigger,
+          detail: "Review request received. Fetching pull request files and diff now.",
+          maxChars: this.config.review.commentMaxChars,
+        }),
+      });
+      this.logger.info("review progress comment posted", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+        status: "queued",
+      });
+
+      this.logger.info("review fetching diff", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+      });
       const [files, diff] = await Promise.all([
         this.github.listPullRequestFiles({ token, owner, repo, pullNumber }),
         this.github.getPullRequestDiff({ token, owner, repo, pullNumber }),
       ]);
+      await this.github.upsertStickyIssueComment({
+        token,
+        owner,
+        repo,
+        issueNumber: pullNumber,
+        marker: REVIEW_COMMENT_MARKER,
+        body: progressComment({
+          repository,
+          pullRequest,
+          status: "preparing_session",
+          trigger,
+          detail: `Fetched ${files.length} changed file${files.length === 1 ? "" : "s"}. Starting an OpenComputer durable agent session.`,
+          maxChars: this.config.review.commentMaxChars,
+        }),
+      });
 
+      this.logger.info("review ensuring opencomputer agent", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+      });
       const agentId = await this.openComputer.ensureAgent({
         agentId: this.config.openComputer.agentId,
         name: this.config.openComputer.agentName,
@@ -258,6 +330,12 @@ export class ReviewService {
         maxDiffChars: this.config.review.maxDiffChars,
         manualInstruction,
       });
+      this.logger.info("review creating opencomputer session", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+        agentId,
+      });
       const session = await this.openComputer.createSession({
         agent: agentId,
         input,
@@ -266,6 +344,12 @@ export class ReviewService {
         idempotencyKey: delivery,
       });
       const sessionId = session.session.id;
+      this.logger.info("review opencomputer session created", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+        sessionId,
+      });
 
       await this.github.upsertStickyIssueComment({
         token,
@@ -276,6 +360,12 @@ export class ReviewService {
         body: runningComment({ repository, pullRequest, sessionId, trigger }),
       });
 
+      this.logger.info("review waiting for opencomputer result", {
+        delivery,
+        repository: repository.full_name,
+        pullNumber,
+        sessionId,
+      });
       const result = await this.openComputer.waitForResult(sessionId, {
         timeoutMs: this.config.review.waitTimeoutMs,
         pollIntervalMs: this.config.review.pollIntervalMs,

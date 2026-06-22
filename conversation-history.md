@@ -97,3 +97,15 @@ I checked Fly status and health, confirmed the app was running and configured, t
 > User: "ok those prompts are legit annoying. what would be a good point to restart session in yolo mode without losing anything and how do i do it"
 
 I identified this as a good restart point: code, docs, deployment, secrets, and testing instructions are already pushed or stored locally; the remaining work is debugging PR #1 webhook delivery/progress behavior and possibly adding queued comments on new PRs.
+
+## PR #1 Debugging
+
+> User: "ok lets continue"
+
+I resumed from checkpoint `2028bf5`, reread [README.md](README.md), [conversation-history.md](conversation-history.md), and [opencomputer-dx-notes.md](opencomputer-dx-notes.md), then inspected GitHub App webhook deliveries for PR #1. GitHub had delivered both `pull_request.opened` and `issue_comment.created` to the Fly webhook with HTTP 202, so delivery was healthy. I then confirmed PR #1 only had the user's `/oc-review` comment and no `OpenComputer PR Review` sticky comment.
+
+I changed [src/review.js](src/review.js) so accepted reviews post a sticky `queued` comment immediately after GitHub installation auth succeeds, then update that same comment while fetching the diff, preparing the OpenComputer session, running, and completing or failing. I also added stage logs so future Fly logs show where a job is stuck.
+
+> User: "dont forget to push to the repo frequently with conversation logs and DX notes on opencomputer"
+
+I treated the progress-comment/debugging change as a checkpoint and prepared to commit and push the code plus tracking-doc updates before redeploying.
