@@ -4,59 +4,32 @@ A GitHub App webhook service that reviews pull requests with OpenComputer Durabl
 
 Live demo:
 
-- App URL: `https://oc-pr-review-agent-digger-test0.fly.dev`
-- GitHub App: `https://github.com/apps/0x-test-pr-reviewer`
-- Health check: `https://oc-pr-review-agent-digger-test0.fly.dev/healthz`
-- Verified demo PR: `https://github.com/diggerhq/test-durable-0/pull/1`
+- App: [oc-pr-review-agent-digger-test0.fly.dev](https://oc-pr-review-agent-digger-test0.fly.dev)
+- GitHub App: [0x Test PR Reviewer](https://github.com/apps/0x-test-pr-reviewer)
+- Verified demo PR: [diggerhq/test-durable-0#3](https://github.com/diggerhq/test-durable-0/pull/3)
 
 ## Test The Live App
 
-1. Install the GitHub App:
-   `https://github.com/apps/0x-test-pr-reviewer/installations/new`
-2. Select a test repository.
-3. Open a new non-draft pull request, or push a new commit to an existing non-draft PR.
-4. Look for a sticky PR comment titled `OpenComputer PR Review`.
-5. To manually rerun a review, comment on the PR with:
+1. [Install the GitHub App](https://github.com/apps/0x-test-pr-reviewer/installations/new) on a test repository.
+2. Open a new non-draft pull request, or push a commit to an existing non-draft PR.
+3. Watch for one sticky PR comment titled `OpenComputer PR Review`.
+
+To rerun manually, comment on the PR with:
 
 ```text
 /oc-review
 ```
 
-Expected behavior:
+The comment should move from queued/running progress to a final review when the OpenComputer session completes.
 
-- The app posts progress in the PR comment as soon as it accepts the review.
-- The same comment updates while the OpenComputer session is running.
-- The final review replaces the progress text when the session completes.
-
-Smoke test:
+Quick checks:
 
 ```bash
 curl https://oc-pr-review-agent-digger-test0.fly.dev/healthz
-```
-
-Expected response:
-
-```json
-{"ok":true,"configured":true,"missing":[]}
-```
-
-Runtime logs:
-
-```bash
 flyctl logs --app oc-pr-review-agent-digger-test0
 ```
 
-If no PR comment appears, check the GitHub App installation permissions first. The app needs **Pull requests: read and write** and **Issues: read and write**. Then check GitHub App delivery logs under:
-
-```text
-GitHub App settings -> Advanced -> Recent Deliveries
-```
-
-The webhook URL should be:
-
-```text
-https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github
-```
+The health check should return `configured: true`. If no PR comment appears, verify the installation has **Pull requests: read and write** and **Issues: read and write**, then inspect **GitHub App settings -> Advanced -> Recent Deliveries**. The webhook should point at `https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github`.
 
 ## How It Works
 
@@ -226,11 +199,7 @@ flyctl secrets set \
 curl https://oc-pr-review-agent-digger-test0.fly.dev/healthz
 ```
 
-To create a preconfigured GitHub App for another deployment, open:
-
-```text
-https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app
-```
+To create a preconfigured GitHub App for another deployment, open [the manifest setup page](https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app).
 
 GitHub redirects back with a temporary manifest code. Exchange it within one hour, then set the returned app ID, private key, and webhook secret as deployment secrets. Keep private keys and webhook secrets out of git.
 

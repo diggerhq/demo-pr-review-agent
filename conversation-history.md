@@ -177,3 +177,9 @@ I added [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements
 > User: "also if any fallbacks / unused code paths remain (i noticed smth about store) remove them, we dont need any fallbacks in the example repo, the less code there is the better is the example"
 
 I removed the local [src/store.ts](src/store.ts) runtime store and its dependency injection from [src/server.ts](src/server.ts), [src/types.ts](src/types.ts), and [src/review.ts](src/review.ts). The example now uses GitHub, OpenComputer, and Hono routing only; review progress is observable through GitHub comments and platform logs. I also removed old polling config from [src/config.ts](src/config.ts) and [.env.example](.env.example), updated [README.md](README.md), and added tests for session-key routing in [test/review.test.ts](test/review.test.ts). This cleanup is in [`5f31679`](https://github.com/diggerhq/test-durable-0/commit/5f31679). I deployed image `deployment-01KVRK5HQZ26QD41AATY5ACYYQ` and verified PR #3 completed through the OpenComputer callback with session `ses_ae2f4ab1307949ea96e5b115`.
+
+> User: "in the readme links should be links. also testing part at the top a bit too long, lets make it a bit more reader-friendly"
+
+> User: "well not all links - just the ones user may actually want to click"
+
+I shortened the top of [README.md](README.md) so the live-test flow focuses on installing the GitHub App, opening or updating a PR, watching the sticky review comment, and rerunning with `/oc-review`. I converted only likely click targets into Markdown links: the live app, GitHub App, verified demo PR, install page, and manifest setup page. Command-oriented URLs remain in commands or inline literals.
