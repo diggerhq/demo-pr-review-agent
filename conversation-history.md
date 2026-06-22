@@ -155,3 +155,5 @@ I added OpenComputer DX notes about SDK package discovery, the sandbox-first npm
 > User: "and typescript pls not raw js"
 
 I converted source and tests to TypeScript, added [tsconfig.json](tsconfig.json), updated package scripts to build to `dist`, changed Docker/Fly deployment to build the TypeScript app, and kept runtime execution on compiled JavaScript. Local checks now run through `tsx` for tests and `tsc --noEmit` for linting.
+
+I committed the refactor as [`c607105`](https://github.com/diggerhq/test-durable-0/commit/c607105), deployed it to Fly as image `deployment-01KVRHJX9CV353VE4DKKX7Y9XF`, and verified the live `/healthz` endpoint still returns `configured: true`.
