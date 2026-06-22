@@ -35,6 +35,9 @@ export interface AppConfig {
 export interface GitHubRepository {
   name: string;
   full_name: string;
+  html_url?: string;
+  clone_url?: string;
+  private?: boolean;
   owner: {
     login: string;
   };
@@ -52,10 +55,12 @@ export interface GitHubPullRequest {
   base?: {
     ref?: string;
     sha?: string;
+    repo?: GitHubRepository;
   };
   head?: {
     ref?: string;
     sha?: string;
+    repo?: GitHubRepository;
   };
 }
 

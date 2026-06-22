@@ -38,7 +38,7 @@ The Worker has four responsibilities:
 
 1. Accept a GitHub webhook and run the short setup path.
 2. Fetch the PR metadata, changed files, and diff.
-3. Start an [OpenComputer Durable Agent Session](https://docs.opencomputer.dev/agent-sessions/sessions) with that PR context and a completion callback.
+3. Start an [OpenComputer Durable Agent Session](https://docs.opencomputer.dev/agent-sessions/sessions) that tells the agent to check out the PR in its hands sandbox, using the diff as a map and fallback.
 4. Let the [OpenComputer webhook](https://docs.opencomputer.dev/agent-sessions/webhooks) update one sticky PR comment when the session finishes.
 
 The app keeps no database, local queue, or in-memory job state. Each [OpenComputer session](https://docs.opencomputer.dev/agent-sessions/sessions) stores the GitHub routing data in `metadata`; when OpenComputer calls back, the Worker reads that metadata from the session snapshot and knows which PR comment to update.
@@ -64,7 +64,7 @@ const agent = existingAgent || await oc.agents.create({
 });
 ```
 
-At runtime, each PR starts a [durable session](https://docs.opencomputer.dev/agent-sessions/sessions) against that existing agent. The real code is in [src/review.ts](src/review.ts), and the SDK shape is documented in the [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
+At runtime, each PR starts a [durable session](https://docs.opencomputer.dev/agent-sessions/sessions) against that existing agent. The task includes repository clone URLs, base/head refs and SHAs, changed-file metadata, and the unified diff. The agent is instructed to use the OpenComputer hands sandbox tools, including [`use_repo`](https://docs.opencomputer.dev/agent-sessions/runtime-tools), `bash`, `read`, and `ls`, before falling back to the diff. The real code is in [src/review.ts](src/review.ts), and the SDK shape is documented in the [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
 
 ```ts
 const session = await oc.sessions.create({
@@ -231,7 +231,7 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 - For simplicity, the GitHub webhook handler awaits only the setup work needed to create the OpenComputer session and post the running comment. If that setup can approach GitHub's webhook timeout in production, move it behind a queue or serverless `waitUntil` equivalent.
 - `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts. See the OpenComputer [API/SDK reference](https://docs.opencomputer.dev/agent-sessions/api-reference).
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
-- The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.
+- The task asks the agent to check out public repositories in the hands sandbox and use the diff as fallback context. Private-repo checkout needs a first-class OpenComputer source/workspace or secret handoff so GitHub installation tokens never become model-visible prompt text.
 
 ## Tracking Docs
 

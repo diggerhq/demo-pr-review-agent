@@ -35,16 +35,28 @@ const oc = new OpenComputer({
   baseUrl: config.openComputer.baseUrl,
 });
 
-const existing = await oc.agents.list({ limit: 100 });
-const agent = existing.data.find((item) => item.name === config.openComputer.agentName) || await oc.agents.create({
-  name: config.openComputer.agentName,
-  runtime: "claude",
-  model: config.openComputer.model,
+const agentConfig = {
   prompt: REVIEW_AGENT_PROMPT,
+  model: config.openComputer.model,
   credential: config.openComputer.credentialId || undefined,
   key: config.openComputer.credentialId ? undefined : config.openComputer.anthropicKey || undefined,
   limits: config.openComputer.limits,
-});
+};
+
+let agent;
+if (config.openComputer.agentId) {
+  agent = await oc.agents.update(config.openComputer.agentId, agentConfig);
+} else {
+  const existing = await oc.agents.list({ limit: 100 });
+  const namedAgent = existing.data.find((item) => item.name === config.openComputer.agentName);
+  agent = namedAgent
+    ? await oc.agents.update(namedAgent.id, agentConfig)
+    : await oc.agents.create({
+      name: config.openComputer.agentName,
+      runtime: "claude",
+      ...agentConfig,
+    });
+}
 
 console.log(`OpenComputer agent ready: ${agent.id}`);
 console.log(`Set OPENCOMPUTER_AGENT_ID=${agent.id}`);

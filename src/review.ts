@@ -516,7 +516,7 @@ export class ReviewService {
           pullRequest,
           status: "preparing_session",
           trigger,
-          detail: `Fetched ${files.length} changed file${files.length === 1 ? "" : "s"}. Starting an OpenComputer durable agent session.`,
+          detail: `Fetched ${files.length} changed file${files.length === 1 ? "" : "s"}. Starting an OpenComputer durable agent session; the agent will try to check out the PR in its hands sandbox and use the diff as fallback context.`,
           maxChars: this.config.review.commentMaxChars,
         }),
       });

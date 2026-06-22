@@ -58,6 +58,17 @@ The SDK types expose `secret` for `session.destinations.create({ secret })`, but
 - A small verifier helper, for example `verifyOpenComputerWebhook({ secret, body, headers })`.
 - An example server route that verifies a signed OpenComputer callback before calling `oc.sessions.get(sessionId)`.
 
+## Repository Checkout / Workspace Sources
+
+The Durable Agent Sessions runtime has hands-sandbox tools such as `use_repo`, `bash`, `read`, `write`, and `ls`, so a public GitHub repository can be checked out by prompt today. For a GitHub App PR reviewer, the harder production requirement is private repository checkout without exposing installation tokens to prompt text, event logs, or the model.
+
+Useful API shapes:
+
+- `oc.sessions.create({ source: { type: "github_pr", owner, repo, pullNumber, installationId } })`, where OpenComputer performs a secure checkout using an app-side connector or exchanged credential.
+- `oc.sessions.create({ workspace: workspaceId })`, where the app prepares a sandbox/workspace through privileged APIs and the managed session attaches to it.
+- A session-scoped secret or credential binding that is available only to the hands sandbox checkout tool, not to model-visible text or general shell history.
+- Typed SDK examples for PR review: checkout head commit, fetch base commit, run focused commands, emit a final review, and route completion via session `metadata`.
+
 ## Documentation Notes
 
 - The Sessions docs show `metadata` in create-session and session-object examples.

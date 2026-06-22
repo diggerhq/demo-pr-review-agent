@@ -15,7 +15,13 @@ test("truncateText keeps head and tail with an omission marker", () => {
 
 test("buildReviewTask includes PR context and untrusted-content warning", () => {
   const task = buildReviewTask({
-    repository: { full_name: "acme/widgets", name: "widgets", owner: { login: "acme" } },
+    repository: {
+      full_name: "acme/widgets",
+      name: "widgets",
+      clone_url: "https://github.com/acme/widgets.git",
+      private: false,
+      owner: { login: "acme" },
+    },
     pullRequest: {
       number: 12,
       title: "Fix widget cache",
@@ -32,6 +38,9 @@ test("buildReviewTask includes PR context and untrusted-content warning", () => 
   });
 
   assert.match(task, /Repository: acme\/widgets/);
+  assert.match(task, /Head clone URL: https:\/\/github.com\/acme\/widgets.git/);
+  assert.match(task, /Hands sandbox instructions/);
+  assert.match(task, /use_repo/);
   assert.match(task, /Untrusted pull request body/);
   assert.match(task, /src\/cache.js/);
 });
