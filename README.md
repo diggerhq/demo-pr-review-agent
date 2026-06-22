@@ -10,6 +10,65 @@ The user-facing shape is:
 4. Pull request events trigger an OpenComputer durable agent session.
 5. The service posts a sticky review comment back to the PR when the session completes.
 
+## Test The Live Deployment
+
+The current public deployment is:
+
+```text
+https://oc-pr-review-agent-digger-test0.fly.dev
+```
+
+Smoke test the service:
+
+```bash
+curl https://oc-pr-review-agent-digger-test0.fly.dev/healthz
+```
+
+Expected response:
+
+```json
+{"ok":true,"configured":true,"missing":[]}
+```
+
+End-to-end PR review test:
+
+1. Install the GitHub App:
+   `https://github.com/apps/0x-test-pr-reviewer/installations/new`
+2. Select a test repository.
+3. Open a PR in that repo, or use an existing open PR.
+4. Comment on the PR:
+
+```text
+/oc-review
+```
+
+Expected behavior:
+
+- The app receives the `issue_comment` webhook.
+- It posts or updates a sticky PR comment titled `OpenComputer PR Review`.
+- The comment first says the review is running.
+- The comment updates with the OpenComputer review result when the durable session completes.
+
+You can also trigger a review by pushing a new commit to the PR, which sends `pull_request.synchronize`.
+
+If no PR comment appears, check GitHub App delivery logs first:
+
+```text
+GitHub App settings -> Advanced -> Recent Deliveries
+```
+
+The webhook URL should be:
+
+```text
+https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github
+```
+
+Runtime logs:
+
+```bash
+flyctl logs --app oc-pr-review-agent-digger-test0
+```
+
 ## What It Does
 
 - Verifies GitHub webhook signatures with `X-Hub-Signature-256`.

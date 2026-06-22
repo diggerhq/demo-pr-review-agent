@@ -81,3 +81,11 @@ I imported the GitHub App, OpenComputer, and Anthropic runtime secrets into Fly.
 > User: "ensure keys dont leak into git when you capture prompts. also maybe put them in local env (gitignored)"
 
 I copied the secret set into local `.env`, verified `.env` is ignored by git, deleted temporary secret exchange files, and redacted secret values in this log.
+
+> User: "so how do i test now?"
+
+I gave the live test path: install the GitHub App, select a test repo, open or use an existing PR, comment `/oc-review`, and check for a sticky `OpenComputer PR Review` comment. I also noted the health endpoint and Fly logs.
+
+> User: "make sure to add instructions how to test to the repo in the readme front and center"
+
+I moved the live deployment smoke test and end-to-end PR review test instructions into a prominent section near the top of [README.md](README.md).
