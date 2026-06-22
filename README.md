@@ -35,7 +35,7 @@ The health check should return `configured: true`. If no PR comment appears, ver
 
 The app has four responsibilities:
 
-1. Accept a GitHub webhook and return quickly.
+1. Accept a GitHub webhook and run the short setup path.
 2. Fetch the PR metadata, changed files, and diff.
 3. Start an OpenComputer Durable Agent Session with that PR context and a completion callback.
 4. Let the OpenComputer callback update one sticky PR comment when the session finishes.
@@ -110,7 +110,7 @@ app.post("/webhooks/opencomputer", async (c) => {
 });
 ```
 
-The webhook route is just normal app plumbing: verify GitHub, hand work to the review service, and return `202`. See [src/app.ts](src/app.ts).
+The webhook route is just normal app plumbing: verify GitHub, start the durable OpenComputer session, and return `202`. See [src/app.ts](src/app.ts).
 
 ```ts
 app.post("/webhooks/github", async (c) => {
@@ -119,13 +119,13 @@ app.post("/webhooks/github", async (c) => {
     return c.json({ ok: false }, 401);
   }
 
-  reviewService.handleWebhook({
+  const result = await reviewService.handleWebhook({
     event: c.req.header("x-github-event"),
     delivery: c.req.header("x-github-delivery"),
     payload: JSON.parse(body.toString("utf8")),
   });
 
-  return c.json({ ok: true, accepted: true }, 202);
+  return c.json({ ok: true, ...result }, result.accepted ? 202 : 200);
 });
 ```
 
@@ -213,6 +213,7 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 ## Production Notes
 
 - OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
+- For simplicity, the GitHub webhook handler awaits only the setup work needed to create the OpenComputer session and post the running comment. If that setup can approach GitHub's webhook timeout in production, move it behind a queue or serverless `waitUntil` equivalent.
 - `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts.
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.

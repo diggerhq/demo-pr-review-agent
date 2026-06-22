@@ -25,7 +25,9 @@ interface WebhookContext {
   payload: GitHubWebhookPayload;
 }
 
-interface QueuedReviewJob {
+type WebhookResult = { accepted: boolean; reason: string };
+
+interface ReviewJob {
   delivery: string;
   installationId?: number;
   repository: GitHubRepository;
@@ -90,7 +92,7 @@ export function reviewSessionMetadata({
   delivery,
   repository,
   pullRequest,
-}: Pick<QueuedReviewJob, "delivery" | "repository" | "pullRequest">): ReviewSessionMetadata {
+}: Pick<ReviewJob, "delivery" | "repository" | "pullRequest">): ReviewSessionMetadata {
   return {
     source: REVIEW_METADATA_SOURCE,
     owner: repository.owner.login,
@@ -339,7 +341,7 @@ export class ReviewService {
     this.openComputer = openComputer;
   }
 
-  handleWebhook({ event, delivery, payload }: WebhookContext): { accepted: boolean; reason: string } {
+  async handleWebhook({ event, delivery, payload }: WebhookContext): Promise<WebhookResult> {
     console.info("received webhook", {
       delivery,
       event,
@@ -364,7 +366,7 @@ export class ReviewService {
     return { accepted: false, reason: `ignored event ${event}` };
   }
 
-  handlePullRequestWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
+  async handlePullRequestWebhook({ delivery, payload }: Omit<WebhookContext, "event">): Promise<WebhookResult> {
     if (!delivery) {
       return { accepted: false, reason: "ignored GitHub webhook without delivery id" };
     }
@@ -381,7 +383,7 @@ export class ReviewService {
       return { accepted: false, reason: "ignored draft pull request" };
     }
 
-    this.queueReview({
+    await this.reviewPullRequest({
       delivery,
       installationId: payload.installation?.id,
       repository: payload.repository,
@@ -389,10 +391,10 @@ export class ReviewService {
       trigger: `pull_request.${payload.action}`,
     });
 
-    return { accepted: true, reason: "queued pull request review" };
+    return { accepted: true, reason: "started pull request review" };
   }
 
-  handleIssueCommentWebhook({ delivery, payload }: Omit<WebhookContext, "event">): { accepted: boolean; reason: string } {
+  async handleIssueCommentWebhook({ delivery, payload }: Omit<WebhookContext, "event">): Promise<WebhookResult> {
     if (!delivery) {
       return { accepted: false, reason: "ignored GitHub webhook without delivery id" };
     }
@@ -410,7 +412,7 @@ export class ReviewService {
       return { accepted: false, reason: "ignored issue comment without review command" };
     }
 
-    this.queueManualReview({
+    await this.reviewManualPullRequest({
       delivery,
       installationId: payload.installation?.id,
       repository: payload.repository,
@@ -418,47 +420,34 @@ export class ReviewService {
       manualInstruction: command.instruction,
     });
 
-    return { accepted: true, reason: "queued manual pull request review" };
+    return { accepted: true, reason: "started manual pull request review" };
   }
 
-  queueReview(job: QueuedReviewJob): void {
-    setImmediate(() => {
-      this.reviewPullRequest(job).catch((error) => {
-        console.error("review job crashed", {
-          delivery: job.delivery,
-          error: errorRecord(error),
-        });
+  async reviewManualPullRequest(job: ManualReviewJob): Promise<void> {
+    try {
+      const token = await this.github.installationToken(job.installationId);
+      const pullRequest = await this.github.getPullRequest({
+        token,
+        owner: job.repository.owner.login,
+        repo: job.repository.name,
+        pullNumber: job.pullNumber,
       });
-    });
-  }
 
-  queueManualReview(job: ManualReviewJob): void {
-    setImmediate(async () => {
-      try {
-        const token = await this.github.installationToken(job.installationId);
-        const pullRequest = await this.github.getPullRequest({
-          token,
-          owner: job.repository.owner.login,
-          repo: job.repository.name,
-          pullNumber: job.pullNumber,
-        });
-
-        await this.reviewPullRequest({
-          delivery: job.delivery,
-          installationId: job.installationId,
-          repository: job.repository,
-          pullRequest,
-          trigger: "issue_comment.command",
-          manualInstruction: job.manualInstruction,
-          installationToken: token,
-        });
-      } catch (error) {
-        console.error("manual review job crashed", {
-          delivery: job.delivery,
-          error: errorRecord(error),
-        });
-      }
-    });
+      await this.reviewPullRequest({
+        delivery: job.delivery,
+        installationId: job.installationId,
+        repository: job.repository,
+        pullRequest,
+        trigger: "issue_comment.command",
+        manualInstruction: job.manualInstruction,
+        installationToken: token,
+      });
+    } catch (error) {
+      console.error("manual review failed before session handoff", {
+        delivery: job.delivery,
+        error: errorRecord(error),
+      });
+    }
   }
 
   async reviewPullRequest({
@@ -469,7 +458,7 @@ export class ReviewService {
     trigger,
     manualInstruction = "",
     installationToken = "",
-  }: QueuedReviewJob): Promise<void> {
+  }: ReviewJob): Promise<void> {
     const owner = repository.owner.login;
     const repo = repository.name;
     const pullNumber = pullRequest.number;
@@ -584,7 +573,6 @@ export class ReviewService {
         marker: REVIEW_COMMENT_MARKER,
         body: runningComment({ repository, pullRequest, sessionId, trigger }),
       });
-      await this.completeReviewFromSession(sessionId);
 
       console.info("review waiting for opencomputer webhook", {
         delivery,

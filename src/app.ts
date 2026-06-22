@@ -80,7 +80,11 @@ export function createApp({ config, reviewService }: { config: AppConfig; review
       return c.json({ ok: false, error: "invalid signature" }, 401);
     }
 
-    const result = reviewService.handleWebhook({
+    // This example awaits only the short setup path: GitHub context fetch,
+    // progress comment, and OpenComputer session creation. Production apps
+    // should move this handoff to a queue or serverless waitUntil-style task
+    // if setup work can approach GitHub's webhook timeout.
+    const result = await reviewService.handleWebhook({
       event: c.req.header("x-github-event"),
       delivery: c.req.header("x-github-delivery"),
       payload: JSON.parse(body.toString("utf8")) as GitHubWebhookPayload,
