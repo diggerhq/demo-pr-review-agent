@@ -169,7 +169,7 @@ Set all required secrets in the host dashboard, then configure the GitHub App we
 - Health: `https://oc-pr-review-agent-digger-test0.fly.dev/healthz`
 - GitHub App setup: `https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app`
 - Manifest JSON: `https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app/manifest`
-- Current status: deployed and publicly reachable, but `configured: false` until runtime secrets are set.
+- Current status: deployed, publicly reachable, and configured with required runtime secrets.
 
 ## Verification
 
@@ -182,8 +182,10 @@ Current deployment checks:
 
 - Fly machine `784459b274dd78` is `started`.
 - `/` returns HTTP 200.
-- `/healthz` returns HTTP 200 with missing runtime secrets listed.
+- `/healthz` returns HTTP 200 with `configured: true`.
 - `/setup/github-app/manifest` returns the expected GitHub App manifest.
+
+Secrets are present in Fly and in local `.env` for development. `.env` is ignored by git and must remain untracked.
 
 ## Tracking Docs
 

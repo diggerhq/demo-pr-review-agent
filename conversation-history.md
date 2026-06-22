@@ -69,3 +69,15 @@ Fly deployment succeeded at `https://oc-pr-review-agent-digger-test0.fly.dev/`, 
 > User: "all my prompts and summaries captured? dont forget to capture everything and push frequently"
 
 I confirmed the conversation log is being maintained and recorded the successful Fly redeploy after adding `PUBLIC_URL`.
+
+> User: "GitHub App Created ... [manifest code redacted]"
+
+The user provided the temporary GitHub App Manifest code from the deployed callback page. I exchanged it with GitHub's manifest conversion API, confirmed the generated app metadata without printing secrets, and prepared the GitHub App ID, client ID, slug, private key, and webhook secret for Fly.
+
+> User: "plz set secrets in fly. also here: ANTHROPIC_API_KEY=[redacted] OPENCOMPUTER_API_KEY=[redacted]"
+
+I imported the GitHub App, OpenComputer, and Anthropic runtime secrets into Fly. Fly restarted the machine successfully, `flyctl secrets list` showed all expected secret names as deployed, and `/healthz` returned `configured: true`.
+
+> User: "ensure keys dont leak into git when you capture prompts. also maybe put them in local env (gitignored)"
+
+I copied the secret set into local `.env`, verified `.env` is ignored by git, deleted temporary secret exchange files, and redacted secret values in this log.
