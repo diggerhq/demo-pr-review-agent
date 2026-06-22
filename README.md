@@ -60,44 +60,83 @@ https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github
 
 ## How It Works
 
-Automatic reviews run for these `pull_request` actions:
+The app has four responsibilities:
 
-- `opened`
-- `reopened`
-- `synchronize`
-- `ready_for_review`
+1. Accept a GitHub webhook and return quickly.
+2. Fetch the PR metadata, changed files, and diff.
+3. Start an OpenComputer Durable Agent Session with that PR context.
+4. Update one sticky PR comment as the review moves from queued to done.
 
-Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`. Manual reviews run from PR comments starting with `/oc-review`.
+Automatic reviews run on `pull_request.opened`, `reopened`, `synchronize`, and `ready_for_review`. Manual reviews run from PR comments starting with `/oc-review`. Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`.
 
-End-to-end flow:
+The key OpenComputer part is small. The real code is in [src/review.ts](src/review.ts).
 
-1. GitHub sends a signed webhook to `POST /webhooks/github`.
-2. The service verifies `X-Hub-Signature-256` with `GITHUB_WEBHOOK_SECRET`.
-3. The service quickly returns HTTP 202, then continues review work in the Node process.
-4. It authenticates as the GitHub App installation and posts a queued sticky PR comment.
-5. It fetches PR metadata, changed files, and the unified diff from GitHub.
-6. It uses `@opencomputer/sdk` to create or reuse an OpenComputer agent and start a durable session keyed by repo, PR number, and head SHA.
-7. It polls the OpenComputer session result.
-8. It updates the same PR comment with the final review or a failure message.
+```ts
+import { OpenComputer } from "@opencomputer/sdk";
 
-The OpenComputer task receives PR metadata, the PR body, changed-file summaries, and a truncated unified diff. It does not clone the repository yet.
+const oc = new OpenComputer({
+  apiKey: process.env.OPENCOMPUTER_API_KEY!,
+});
 
-## Moving Parts
+const agent = await oc.agents.create({
+  name: "opencomputer-pr-reviewer",
+  runtime: "claude",
+  model: "anthropic/claude-opus-4-8",
+  prompt: REVIEW_AGENT_PROMPT,
+  key: process.env.ANTHROPIC_API_KEY,
+  limits: { turns: 1, turnSeconds: 600 },
+});
 
-- **GitHub App**: receives PR events and comments after installation in a repo.
-- **Fly web service**: public TypeScript/Hono Node app at `https://oc-pr-review-agent-digger-test0.fly.dev`.
-- **GitHub API**: fetches PR data and creates or updates the sticky review comment.
-- **OpenComputer SDK**: `OpenComputer` from `@opencomputer/sdk` creates agents, starts sessions, and reads session results.
-- **Model credential**: Anthropic key or OpenComputer credential used by the OpenComputer agent.
-- **Local event log**: `data/reviews.jsonl` records review lifecycle events for development.
+const session = await oc.sessions.create({
+  agent: agent.id,
+  input: buildReviewTask({ repository, pullRequest, files, diff }),
+  key: `github:${repo}:pull:${number}:sha:${headSha}`,
+  idempotencyKey: githubDeliveryId,
+});
+```
 
-The code is intentionally small:
+Then poll the durable session result and post it back to GitHub:
 
-- [src/server.ts](src/server.ts): process entry point and dependency wiring.
-- [src/app.ts](src/app.ts): Hono routes.
-- [src/views.ts](src/views.ts): setup-page HTML.
-- [src/review.ts](src/review.ts): PR review orchestration and direct OpenComputer SDK calls.
-- [src/github.ts](src/github.ts): GitHub App API calls.
+```ts
+while (true) {
+  const result = await session.result();
+  if (result.lastTurn?.yieldReason) {
+    await github.upsertStickyIssueComment({
+      issueNumber: pullRequest.number,
+      marker: "<!-- opencomputer-pr-review -->",
+      body: markdownFrom(result),
+    });
+    break;
+  }
+
+  await sleep(5000);
+}
+```
+
+The webhook route is just normal app plumbing: verify GitHub, hand work to the review service, and return `202`. See [src/app.ts](src/app.ts).
+
+```ts
+app.post("/webhooks/github", async (c) => {
+  const body = await readWebhookBody(c.req.raw);
+  if (!verifyGitHubSignature(secret, body, c.req.header("x-hub-signature-256"))) {
+    return c.json({ ok: false }, 401);
+  }
+
+  reviewService.handleWebhook({
+    event: c.req.header("x-github-event"),
+    delivery: c.req.header("x-github-delivery"),
+    payload: JSON.parse(body.toString("utf8")),
+  });
+
+  return c.json({ ok: true, accepted: true }, 202);
+});
+```
+
+The rest is provider-specific glue:
+
+- [src/github.ts](src/github.ts) signs GitHub App JWTs, fetches PR data, and writes comments.
+- [src/prompts.ts](src/prompts.ts) turns GitHub PR context into the agent task.
+- [src/server.ts](src/server.ts) wires config, Hono, GitHub, and OpenComputer together.
 
 ## Configure
 
