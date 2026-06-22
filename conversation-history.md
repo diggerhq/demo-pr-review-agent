@@ -186,7 +186,7 @@ I shortened the top of [README.md](README.md) so the live-test flow focuses on i
 
 > User: "now metadata is supported (docs just deployed, refresh) - i guess best to update our example to use appropriate apis"
 
-I refreshed the OpenComputer Sessions docs and verified the API by creating a small session with `metadata`, then fetching it back from `oc.sessions.get(sessionId)`. I updated [src/review.ts](src/review.ts) so new sessions use OpenComputer session `metadata` for GitHub callback routing instead of encoding routing data into `session.key`. I also updated [README.md](README.md), [opencomputer-dx-notes.md](opencomputer-dx-notes.md), [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md), and [test/review.test.ts](test/review.test.ts) to reflect the metadata flow.
+I refreshed the OpenComputer Sessions docs and verified the API by creating a small session with `metadata`, then fetching it back from `oc.sessions.get(sessionId)`. I updated [src/review.ts](src/review.ts) so new sessions use OpenComputer session `metadata` for GitHub callback routing instead of encoding routing data into `session.key`. I also updated [README.md](README.md), [opencomputer-dx-notes.md](opencomputer-dx-notes.md), [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md), and [test/review.test.ts](test/review.test.ts) to reflect the metadata flow. The change was committed in [`5076000`](https://github.com/diggerhq/test-durable-0/commit/5076000), deployed as Fly image `deployment-01KVRMC4WGZ1P7V0SRW22VQ5BB`, and verified on PR #3 with session `ses_d413c771f7e74c639500f5a6`.
 
 > User: "ouch it looks like SDK wasnt updated. or was there nothing to expect in SDK surface from your pov?"
 
