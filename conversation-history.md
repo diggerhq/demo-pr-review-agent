@@ -35,3 +35,11 @@ I simplified this log into chapter-level sections with quoted prompts and narrat
 > User: "ok now lets deploy and tell me how to test"
 
 I checked available tools and found `oc` configured, while `gh` had an invalid local token. Because required app secrets were not present in the environment, I changed the service to boot in a setup-pending mode: `/` and `/healthz` work before secrets are configured, and webhook processing returns `503 setup incomplete` until the GitHub App and OpenComputer credentials are supplied. The change lives in [src/server.js](src/server.js) and [src/config.js](src/config.js), with coverage in [test/config.test.js](test/config.test.js).
+
+> User: "tell me which api keys are needed i can provide (and you put in env)"
+
+I listed the required runtime secrets: GitHub App ID, GitHub App private key as base64, GitHub webhook secret, OpenComputer API key, and either an Anthropic API key or an existing OpenComputer credential ID. I also noted optional GitHub App slug and model settings.
+
+> User: "dont forget to keep making DX notes frequently as soon as you encounter areas for improvement. and capturing my prompts + summaries in the log."
+
+I paused deployment to update this log and [opencomputer-dx-notes.md](opencomputer-dx-notes.md). The first deployment-specific DX note is that `oc exec` did not provide an obvious file-transfer path from a private local repo into a sandbox; anonymous GitHub clone failed because the repo is private, and stdin-style transfer through `oc exec` did not work like SSH.
