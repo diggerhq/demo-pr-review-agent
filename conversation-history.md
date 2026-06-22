@@ -111,3 +111,7 @@ I changed [src/review.js](src/review.js) so accepted reviews post a sticky `queu
 I treated the progress-comment/debugging change as a checkpoint and prepared to commit and push the code plus tracking-doc updates before redeploying.
 
 After deploying the progress-comment change, I attempted to trigger `/oc-review` through the GitHub App installation token. GitHub returned `403 Resource not accessible by integration` when creating an issue comment, even though the app had `Issues: write`. The `X-Accepted-GitHub-Permissions` header included `issues=write; pull_requests=write`, and the token had `pull_requests=read`, so the app needs Pull requests write permission for PR conversation comments. I updated the manifest and README accordingly; the existing GitHub App installation still needs that permission approved in GitHub.
+
+> User: "i bumped some permissions also in the app just in case, could recheck"
+
+I rechecked the GitHub App registration and the `diggerhq/test-durable-0` installation. The App registration now has `pull_requests: write`, but the installed org copy still has `pull_requests: read`, and a permission probe still gets `403 Resource not accessible by integration`. The required approval/update link from GitHub is `https://github.com/organizations/diggerhq/settings/installations/141975477`.

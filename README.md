@@ -51,6 +51,14 @@ Expected behavior:
 
 The GitHub App must have **Pull requests: read and write**. GitHub can reject PR conversation comments with `403 Resource not accessible by integration` when the app has `Issues: write` but only `Pull requests: read`.
 
+For the current test app, verify or approve the installed permission update here:
+
+```text
+https://github.com/organizations/diggerhq/settings/installations/141975477
+```
+
+The installation token must show `pull_requests: write` before the app can post review progress comments to PR #1.
+
 You can also trigger a review by pushing a new commit to the PR, which sends `pull_request.synchronize`.
 
 If no PR comment appears, check GitHub App delivery logs first:
