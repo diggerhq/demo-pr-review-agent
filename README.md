@@ -101,18 +101,53 @@ For local webhook testing, expose the server with a tunnel such as `ngrok`, set 
 
 The service is a plain Node HTTP server. Any host that can run Node 20 and expose a public HTTPS URL should work.
 
-Docker:
+### Fly.io
+
+This repo includes [fly.toml](fly.toml) as the current primary deployment target.
+
+```bash
+flyctl apps create oc-pr-review-agent-digger-test0
+flyctl deploy
+```
+
+Set runtime secrets with:
+
+```bash
+flyctl secrets set \
+  GITHUB_APP_ID=... \
+  GITHUB_PRIVATE_KEY_BASE64=... \
+  GITHUB_WEBHOOK_SECRET=... \
+  OPENCOMPUTER_API_KEY=... \
+  ANTHROPIC_API_KEY=...
+```
+
+Once deployed, the public URL is:
+
+```text
+https://oc-pr-review-agent-digger-test0.fly.dev
+```
+
+Configure the GitHub App webhook URL as:
+
+```text
+https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github
+```
+
+### Docker
 
 ```bash
 docker build -t opencomputer-pr-review-agent .
 docker run --env-file .env -p 3000:3000 opencomputer-pr-review-agent
 ```
 
-Render-style hosts can use:
+### Render
 
-```bash
-npm start
-```
+- Link this GitHub repo as a Render web service, or create the service from [render.yaml](render.yaml).
+- Runtime: Node.
+- Build command: `npm install`.
+- Start command: `npm start`.
+- Health check path: `/healthz`.
+- The app uses Render's `RENDER_EXTERNAL_URL` automatically when `PUBLIC_URL` is not set.
 
 Set all required secrets in the host dashboard, then configure the GitHub App webhook URL to the public service URL plus `/webhooks/github`.
 
@@ -125,9 +160,9 @@ Set all required secrets in the host dashboard, then configure the GitHub App we
 
 ## Verification
 
-Current local checks for implementation checkpoint [`2ba71a3`](https://github.com/diggerhq/test-durable-0/commit/2ba71a3):
+Current local checks:
 
-- `npm test`: 7 passing tests.
+- `npm test`: 9 passing tests.
 - `npm run lint`: Node syntax checks passed.
 
 ## Tracking Docs

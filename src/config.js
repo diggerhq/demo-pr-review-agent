@@ -33,7 +33,7 @@ export function normalizePrivateKey(env) {
 
 export function loadConfig(env = process.env) {
   const webhookPath = env.WEBHOOK_PATH || "/webhooks/github";
-  const publicUrl = (env.PUBLIC_URL || "").replace(/\/$/, "");
+  const publicUrl = (env.PUBLIC_URL || env.RENDER_EXTERNAL_URL || "").replace(/\/$/, "");
 
   return {
     port: integer(env.PORT, 3000),

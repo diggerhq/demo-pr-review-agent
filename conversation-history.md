@@ -43,3 +43,19 @@ I listed the required runtime secrets: GitHub App ID, GitHub App private key as 
 > User: "dont forget to keep making DX notes frequently as soon as you encounter areas for improvement. and capturing my prompts + summaries in the log."
 
 I paused deployment to update this log and [opencomputer-dx-notes.md](opencomputer-dx-notes.md). The first deployment-specific DX note is that `oc exec` did not provide an obvious file-transfer path from a private local repo into a sandbox; anonymous GitHub clone failed because the repo is private, and stdin-style transfer through `oc exec` did not work like SSH.
+
+> User: "what are these chunks and sandbox transfer - why are we doing this? just curious, not challenging yet"
+
+I explained that the chunks were a workaround to transfer the private repo into a temporary OpenComputer sandbox after anonymous GitHub clone failed and `oc exec` stdin did not work as expected. I clarified that this was not the intended long-term deployment path.
+
+> User: "i dont think we want to deploy it into a sandbox? why would we? isn't it meant to be render by your own design? or whatever else to get our app to a public URL"
+
+I agreed that the sandbox was the wrong primary deployment target, hibernated the temporary sandbox, checked Render's current deployment docs, and updated the code/config so Render is the intended path: [src/config.js](src/config.js) now uses `RENDER_EXTERNAL_URL`, and [render.yaml](render.yaml) defines a Node web service with prompted secrets.
+
+> User: "doesnt have to be render, could be anything - fly, CF worker, you name it - just pick smth and deploy"
+
+I chose Fly.io because this app is a normal long-running Node HTTP webhook service with asynchronous background work, Fly was authenticated in the environment, and it fits the existing Dockerfile without adapting to a Worker/serverless runtime. I added [fly.toml](fly.toml) and made Fly the primary deployment path in [README.md](README.md).
+
+> User: "ok good; dont forget to keep capturing notes (conversation, DX) and commit push frequently"
+
+I acknowledged the checkpoint cadence and updated this log before committing the Fly deployment configuration.
