@@ -63,3 +63,5 @@ I acknowledged the checkpoint cadence and updated this log before committing the
 > User: "can you make a github app via api or gh cli or some manifest or smth? also dont forget to keep capturing notes and pushing frequently"
 
 I checked `gh` and current GitHub App Manifest docs. The installed `gh` CLI has no `gh app` command, and the documented GitHub App Manifest flow still requires a browser approval step, but it can prefill the app registration. I added `/setup/github-app`, `/setup/github-app/manifest`, and `/setup/github-app/callback` so the deployed service can generate a preconfigured GitHub App manifest and guide the credential handoff.
+
+Fly deployment succeeded at `https://oc-pr-review-agent-digger-test0.fly.dev/`, but the manifest endpoint initially returned `503` because Fly does not provide the app's public URL via the same env var as Render. I added `PUBLIC_URL` to [fly.toml](fly.toml) before redeploying.

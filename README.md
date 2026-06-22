@@ -127,6 +127,8 @@ Once deployed, the public URL is:
 https://oc-pr-review-agent-digger-test0.fly.dev
 ```
 
+`fly.toml` sets `PUBLIC_URL` to that host so the setup and manifest pages can generate correct callback and webhook URLs.
+
 Use the deployed setup page to create a preconfigured GitHub App:
 
 ```text
