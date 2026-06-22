@@ -93,6 +93,8 @@ npm test
 npm start
 ```
 
+The server will boot even before all secrets are configured. In that state `/healthz` returns `configured: false`, the home page lists missing variables, and webhook processing returns `503 setup incomplete`.
+
 For local webhook testing, expose the server with a tunnel such as `ngrok`, set `PUBLIC_URL`, and point the GitHub App webhook URL at `PUBLIC_URL/webhooks/github`.
 
 ## Deploy

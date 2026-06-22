@@ -29,3 +29,9 @@ I moved the markdown tracking files to the repository root, added the first huma
 > User: "also conversation log can we make less \"heading noise\" somehow? those headings are repeated and not load-bearing. so maybe we just keep the paragraphs? then later we can introduce sections with headings for meaningful \"chapters\". also in summaries link to relevant files commits etc so that readers could see what was done etc."
 
 I simplified this log into chapter-level sections with quoted prompts and narrative summaries, plus links to relevant files and commits. During local checks, `npm test` caught a comment truncation edge case in [src/prompts.js](src/prompts.js), which I fixed before preparing checkpoint [`2ba71a3`](https://github.com/diggerhq/test-durable-0/commit/2ba71a3). A review of the manual trigger path also found a prefix-collision issue, so `/oc-reviewer` is now rejected by [src/review.js](src/review.js) and covered by [test/review.test.js](test/review.test.js).
+
+## Deployment Prep
+
+> User: "ok now lets deploy and tell me how to test"
+
+I checked available tools and found `oc` configured, while `gh` had an invalid local token. Because required app secrets were not present in the environment, I changed the service to boot in a setup-pending mode: `/` and `/healthz` work before secrets are configured, and webhook processing returns `503 setup incomplete` until the GitHub App and OpenComputer credentials are supplied. The change lives in [src/server.js](src/server.js) and [src/config.js](src/config.js), with coverage in [test/config.test.js](test/config.test.js).

@@ -29,3 +29,4 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 
 - The PR reviewer currently uses in-process polling of `GET /sessions/:id/result` after the GitHub webhook returns. This proves the integration, but a production deployment should probably use a queue plus OpenComputer destinations/webhooks so completion survives process restarts.
 - The app sends PR metadata and a truncated unified diff as the session input instead of giving the OpenComputer runtime direct repository access. Workspaces or a documented "review this GitHub PR" example could make the richer version easier.
+- Deployment testing benefits from a setup-pending mode because the public URL can be verified before GitHub App and model secrets are available. This is more an app pattern than an API issue, but first-party examples could call it out.

@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { loadConfig, validateConfig, webhookUrl } from "./config.js";
+import { loadConfig, missingRequiredConfig, webhookUrl } from "./config.js";
 import { GitHubAppClient } from "./github.js";
 import { OpenComputerClient } from "./opencomputer.js";
 import { JsonlStore } from "./store.js";
@@ -48,8 +48,22 @@ function installUrl(config) {
   return `https://github.com/apps/${config.github.appSlug}/installations/new`;
 }
 
+function htmlEscape(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function homePage(config) {
   const install = installUrl(config);
+  const missing = missingRequiredConfig(config);
+  const setupStatus = missing.length === 0
+    ? "<p><strong>Status:</strong> configured and ready for GitHub webhooks.</p>"
+    : `<p><strong>Status:</strong> setup pending. Missing: <code>${htmlEscape(missing.join(", "))}</code></p>`;
+
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -69,10 +83,11 @@ function homePage(config) {
       <h1>OpenComputer PR Review Agent</h1>
       <div class="panel">
         <p>This GitHub App reviews pull requests in the background using OpenComputer Durable Agent Sessions.</p>
-        ${install ? `<a class="button" href="${install}">Install GitHub App</a>` : "<p>Set <code>GITHUB_APP_SLUG</code> to show an install link here.</p>"}
-        <p>Webhook endpoint: <code>${webhookUrl(config)}</code></p>
+        ${setupStatus}
+        ${install ? `<a class="button" href="${htmlEscape(install)}">Install GitHub App</a>` : "<p>Set <code>GITHUB_APP_SLUG</code> to show an install link here.</p>"}
+        <p>Webhook endpoint: <code>${htmlEscape(webhookUrl(config))}</code></p>
         <p>Health endpoint: <code>/healthz</code></p>
-        <p>Manual trigger: comment <code>${config.review.commandPrefix}</code> on a pull request.</p>
+        <p>Manual trigger: comment <code>${htmlEscape(config.review.commandPrefix)}</code> on a pull request.</p>
       </div>
     </main>
   </body>
@@ -85,7 +100,8 @@ export function createApp({ config, reviewService }) {
       const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
 
       if (request.method === "GET" && url.pathname === "/healthz") {
-        sendJson(response, 200, { ok: true });
+        const missing = missingRequiredConfig(config);
+        sendJson(response, 200, { ok: true, configured: missing.length === 0, missing });
         return;
       }
 
@@ -95,6 +111,16 @@ export function createApp({ config, reviewService }) {
       }
 
       if (request.method === "POST" && url.pathname === config.webhookPath) {
+        const missing = missingRequiredConfig(config);
+        if (missing.length > 0) {
+          sendJson(response, 503, {
+            ok: false,
+            error: "setup incomplete",
+            missing,
+          });
+          return;
+        }
+
         const body = await readBody(request);
         const signature = request.headers["x-hub-signature-256"];
 
@@ -146,7 +172,10 @@ export function createRuntime(config) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const config = loadConfig();
-  validateConfig(config);
+  const missing = missingRequiredConfig(config);
+  if (missing.length > 0) {
+    logger.warn("server starting with incomplete setup", { missing });
+  }
 
   const { app } = createRuntime(config);
   app.listen(config.port, () => {

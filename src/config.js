@@ -72,7 +72,7 @@ export function loadConfig(env = process.env) {
   };
 }
 
-export function validateConfig(config) {
+export function missingRequiredConfig(config) {
   const missing = [];
 
   if (!config.github.appId) missing.push("GITHUB_APP_ID");
@@ -80,6 +80,12 @@ export function validateConfig(config) {
   if (!config.github.privateKey) missing.push("GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_BASE64");
   if (!config.github.webhookSecret) missing.push("GITHUB_WEBHOOK_SECRET");
   if (!config.openComputer.apiKey) missing.push("OPENCOMPUTER_API_KEY");
+
+  return missing;
+}
+
+export function validateConfig(config) {
+  const missing = missingRequiredConfig(config);
 
   if (missing.length > 0) {
     const error = new Error(`Missing required environment variables: ${missing.join(", ")}`);
