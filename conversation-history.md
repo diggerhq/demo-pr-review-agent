@@ -89,3 +89,11 @@ I gave the live test path: install the GitHub App, select a test repo, open or u
 > User: "make sure to add instructions how to test to the repo in the readme front and center"
 
 I moved the live deployment smoke test and end-to-end PR review test instructions into a prominent section near the top of [README.md](README.md).
+
+> User: "ok testing here: https://github.com/diggerhq/test-durable-0/pull/1 - can you check logs it's all going as planned? would be good also to have some indication of progress, and maybe auto-start reviews with a comment on any new pr (for demo purposes)"
+
+I checked Fly status and health, confirmed the app was running and configured, then used the local GitHub App credentials from ignored `.env` to inspect PR #1. The app installation can access `diggerhq/test-durable-0`, PR #1 is open and not draft, but no `OpenComputer PR Review` sticky comment had been posted yet. The next debugging step is to inspect GitHub App webhook delivery logs or trigger `/oc-review`, then add an immediate queued/progress comment on new PR events for demo visibility.
+
+> User: "ok those prompts are legit annoying. what would be a good point to restart session in yolo mode without losing anything and how do i do it"
+
+I identified this as a good restart point: code, docs, deployment, secrets, and testing instructions are already pushed or stored locally; the remaining work is debugging PR #1 webhook delivery/progress behavior and possibly adding queued comments on new PRs.
