@@ -1,9 +1,7 @@
 import type { Limits, OpenComputer, Session } from "@opencomputer/sdk";
-import type { Hono } from "hono";
 import type { GitHubAppClient } from "./github.js";
 
 export interface AppConfig {
-  port: number;
   publicUrl: string;
   webhookPath: string;
   github: {
@@ -93,11 +91,6 @@ export interface ReviewServiceDeps {
   config: AppConfig;
   github: GitHubAppClient;
   openComputer: OpenComputer;
-}
-
-export interface Runtime {
-  app: Hono;
-  reviewService: unknown;
 }
 
 export type OpenComputerSession = Session;

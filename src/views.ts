@@ -87,7 +87,7 @@ export function githubAppSetupPage({
         </form>
       </section>
       <section class="panel">
-        <p>After GitHub redirects back with a <code>code</code>, exchange it within one hour, then set the returned app ID, webhook secret, and private key as Fly secrets.</p>
+        <p>After GitHub redirects back with a <code>code</code>, exchange it within one hour, then set the returned app ID, webhook secret, and private key as Worker secrets.</p>
         <p>Manifest JSON is also available at <a href="/setup/github-app/manifest">/setup/github-app/manifest</a>.</p>
         <pre>${htmlEscape(JSON.stringify(manifest, null, 2))}</pre>
       </section>
@@ -100,7 +100,7 @@ export function githubAppCallbackPage(code: string): string {
       <section class="panel">
         <p>Exchange this manifest code within one hour to retrieve the app ID, private key, and webhook secret.</p>
         <pre>${htmlEscape(code || "No code was provided.")}</pre>
-        <p>Then set the values with <code>flyctl secrets set</code>. Keep the returned private key and webhook secret out of git.</p>
+        <p>Then set the values with <code>wrangler secret put</code>. Keep the returned private key and webhook secret out of git.</p>
       </section>
   `);
 }

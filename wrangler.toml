@@ -1,10 +1,12 @@
-name = "oc-pr-review-agent-digger-test0"
+name = "oc-pr-review"
 main = "src/worker.ts"
 compatibility_date = "2026-06-22"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+preview_urls = false
 
 [vars]
-PUBLIC_URL = "https://oc-pr-review-agent-digger-test0.<your-subdomain>.workers.dev"
+PUBLIC_URL = "https://oc-pr-review.mo-b8f.workers.dev"
 WEBHOOK_PATH = "/webhooks/github"
 OPENCOMPUTER_BASE_URL = "https://api.opencomputer.dev/v3"
 OPENCOMPUTER_WEBHOOK_PATH = "/webhooks/opencomputer"

@@ -41,7 +41,6 @@ export function loadConfig(env: Env = process.env): AppConfig {
   const publicUrl = (env.PUBLIC_URL || "").replace(/\/$/, "");
 
   return {
-    port: integer(env.PORT, 3000),
     publicUrl,
     webhookPath,
     github: {

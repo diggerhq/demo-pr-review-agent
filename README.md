@@ -1,10 +1,10 @@
 # OpenComputer PR Review Agent
 
-A GitHub App webhook service that reviews pull requests with OpenComputer Durable Agent Sessions and posts the result back as one sticky PR comment.
+A serverless GitHub App that reviews pull requests with OpenComputer Durable Agent Sessions and posts the result back as one sticky PR comment.
 
 Live demo:
 
-- App: [oc-pr-review-agent-digger-test0.fly.dev](https://oc-pr-review-agent-digger-test0.fly.dev)
+- App: [oc-pr-review.mo-b8f.workers.dev](https://oc-pr-review.mo-b8f.workers.dev)
 - GitHub App: [0x Test PR Reviewer](https://github.com/apps/0x-test-pr-reviewer)
 - Verified demo PR: [diggerhq/test-durable-0#3](https://github.com/diggerhq/test-durable-0/pull/3)
 
@@ -25,20 +25,22 @@ The comment should move from queued/running progress to a final review when the 
 Quick checks:
 
 ```bash
-curl https://oc-pr-review-agent-digger-test0.fly.dev/healthz
-flyctl logs --app oc-pr-review-agent-digger-test0
+curl https://oc-pr-review.mo-b8f.workers.dev/healthz
+wrangler deployments list
 ```
 
-The health check should return `configured: true`. If no PR comment appears, verify the installation has **Pull requests: read and write** and **Issues: read and write**, then inspect **GitHub App settings -> Advanced -> Recent Deliveries**. The webhook should point at `https://oc-pr-review-agent-digger-test0.fly.dev/webhooks/github`.
+The health check should return `configured: true`. If no PR comment appears, verify the installation has **Pull requests: read and write** and **Issues: read and write**, then inspect **GitHub App settings -> Advanced -> Recent Deliveries**. The webhook should point at `https://oc-pr-review.mo-b8f.workers.dev/webhooks/github`.
 
 ## How It Works
 
-The app has four responsibilities:
+The Worker has four responsibilities:
 
 1. Accept a GitHub webhook and run the short setup path.
 2. Fetch the PR metadata, changed files, and diff.
 3. Start an OpenComputer Durable Agent Session with that PR context and a completion callback.
 4. Let the OpenComputer callback update one sticky PR comment when the session finishes.
+
+The app keeps no database, local queue, or in-memory job state. Each OpenComputer session stores the GitHub routing data in `metadata`; when OpenComputer calls back, the Worker reads that metadata from the session snapshot and knows which PR comment to update.
 
 Automatic reviews run on `pull_request.opened`, `reopened`, `synchronize`, and `ready_for_review`. Manual reviews run from PR comments starting with `/oc-review`. Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`.
 
@@ -89,7 +91,7 @@ await github.upsertStickyIssueComment({
 });
 ```
 
-When OpenComputer calls back, fetch the durable result, read the routing metadata from the session snapshot, and post back to GitHub. This keeps the example stateless between GitHub and OpenComputer webhooks.
+When OpenComputer calls back, fetch the durable result, read the routing metadata from the session snapshot, and post back to GitHub. This keeps the example fully serverless: Cloudflare handles the HTTP request, and OpenComputer owns the durable session state.
 
 ```ts
 app.post("/webhooks/opencomputer", async (c) => {
@@ -129,13 +131,12 @@ app.post("/webhooks/github", async (c) => {
 });
 ```
 
-The rest is provider-specific glue:
+The rest is supporting glue:
 
 - [src/github.ts](src/github.ts) signs GitHub App JWTs, fetches PR data, and writes comments.
 - [src/prompts.ts](src/prompts.ts) turns GitHub PR context into the agent task.
 - [src/runtime.ts](src/runtime.ts) wires config, Hono, GitHub, and OpenComputer together.
 - [src/worker.ts](src/worker.ts) is the thin Cloudflare Worker adapter.
-- [src/server.ts](src/server.ts) is the Node/Fly adapter.
 
 ## Configure
 
@@ -171,7 +172,6 @@ npm install
 npm run bootstrap:agent
 npm test
 npm run build
-npm start
 ```
 
 For iterative development:
@@ -180,7 +180,7 @@ For iterative development:
 npm run dev
 ```
 
-For local webhook testing, expose the server with a tunnel, set `PUBLIC_URL`, and point the GitHub App webhook URL at:
+For local webhook testing, expose Wrangler with a tunnel, set `PUBLIC_URL`, and point the GitHub App webhook URL at:
 
 ```text
 PUBLIC_URL/webhooks/github
@@ -188,10 +188,10 @@ PUBLIC_URL/webhooks/github
 
 ## Deploy
 
-Cloudflare Workers is the recommended deploy target for this example. The app core stays runtime-neutral; the Worker entrypoint only reads `env`, builds the shared runtime, and calls Hono's Fetch handler.
+Cloudflare Workers is the deploy target for this example. The app core stays runtime-neutral; the Worker entrypoint only reads `env`, builds the shared runtime, and calls Hono's Fetch handler.
 
 ```bash
-npm run worker:deploy
+npm run deploy
 ```
 
 Set Worker secrets with Wrangler:
@@ -207,7 +207,7 @@ wrangler secret put OPENCOMPUTER_WEBHOOK_TOKEN
 wrangler secret put ANTHROPIC_API_KEY
 ```
 
-[wrangler.toml](wrangler.toml) contains non-secret defaults and enables `nodejs_compat` so the GitHub App signing code can keep using `node:crypto`. After deploy, set `PUBLIC_URL` in `wrangler.toml` to the deployed Worker URL and update the GitHub App webhook URL to:
+[wrangler.toml](wrangler.toml) contains non-secret defaults and enables `nodejs_compat` so the GitHub App signing code can keep using `node:crypto`. For your own deployment, set `PUBLIC_URL` in `wrangler.toml` to the deployed Worker URL and update the GitHub App webhook URL to:
 
 ```text
 PUBLIC_URL/webhooks/github
@@ -216,36 +216,17 @@ PUBLIC_URL/webhooks/github
 For local Worker testing:
 
 ```bash
-npm run worker:dev
+npm run dev
 ```
 
-Fly.io remains a supported Node/container deploy path.
-
-```bash
-flyctl deploy
-flyctl secrets set \
-  GITHUB_APP_ID=... \
-  GITHUB_PRIVATE_KEY_BASE64=... \
-  GITHUB_WEBHOOK_SECRET=... \
-  OPENCOMPUTER_API_KEY=... \
-  OPENCOMPUTER_AGENT_ID=... \
-  OPENCOMPUTER_WEBHOOK_TOKEN=... \
-  ANTHROPIC_API_KEY=...
-```
-
-[fly.toml](fly.toml) sets `PUBLIC_URL` for the live Fly app. After deploy, verify:
-
-```bash
-curl https://oc-pr-review-agent-digger-test0.fly.dev/healthz
-```
-
-To create a preconfigured GitHub App for another deployment, open [the manifest setup page](https://oc-pr-review-agent-digger-test0.fly.dev/setup/github-app).
+To create a preconfigured GitHub App for another deployment, open [the manifest setup page](https://oc-pr-review.mo-b8f.workers.dev/setup/github-app).
 
 GitHub redirects back with a temporary manifest code. Exchange it within one hour, then set the returned app ID, private key, and webhook secret as deployment secrets. Keep private keys and webhook secrets out of git.
 
 ## Production Notes
 
 - OpenComputer session execution is durable and completion is callback-driven. This prototype keeps callback routing state in session `metadata` so it does not need a database for routing.
+- That metadata handoff is what makes the app fully serverless: GitHub webhook request state, OpenComputer completion routing, and final PR update routing all survive without local process state.
 - For simplicity, the GitHub webhook handler awaits only the setup work needed to create the OpenComputer session and post the running comment. If that setup can approach GitHub's webhook timeout in production, move it behind a queue or serverless `waitUntil` equivalent.
 - `@opencomputer/sdk@0.7.2` types session metadata on create and fetch, so the app can use `session.snapshot.metadata` without local type casts.
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.

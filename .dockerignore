@@ -1,7 +1,0 @@
-.env
-.git
-node_modules
-dist
-data
-npm-debug.log*
-.DS_Store
