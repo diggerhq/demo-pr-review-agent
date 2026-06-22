@@ -109,7 +109,7 @@ function githubAppSetupPage(config, org = "") {
   <head><meta charset="utf-8"><title>GitHub App Setup</title></head>
   <body>
     <h1>GitHub App Setup</h1>
-    <p>Set <code>PUBLIC_URL</code> or deploy on a host that provides <code>RENDER_EXTERNAL_URL</code> before creating the GitHub App manifest.</p>
+    <p>Set <code>PUBLIC_URL</code> before creating the GitHub App manifest.</p>
   </body>
 </html>`;
   }

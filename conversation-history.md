@@ -127,3 +127,11 @@ I confirmed that [src/review.js](src/review.js) auto-handles `pull_request.opene
 > User: "also tell me how it works now end to end; does readme spell it out clearly? what are the moving parts, what goes on under the hood, etc etc - if not update"
 
 I expanded [README.md](README.md) with a front-loaded end-to-end explanation covering the GitHub App, Fly webhook service, GitHub API calls, OpenComputer Durable Agent Sessions, sticky PR comments, trigger behavior, review-job flow, OpenComputer input shape, and operational caveats.
+
+> User: "lets do a pass on making readme nicer for humans. feel like we can be more concise and on point and show the most important parts upfront - like heres how you test it, here's how it works, then everything else. alos feels like a bit too much detail currently"
+
+I rewrote [README.md](README.md) to be shorter and more human-facing, with live testing first, then the end-to-end flow, moving parts, configuration, local run, Fly deployment, and production notes. The duplicate architecture and testing sections were consolidated.
+
+> User: "also render is no longer used I believe? check throughout the repo"
+
+I searched the repo for Render references, removed the unused `render.yaml` blueprint, removed the `RENDER_EXTERNAL_URL` fallback from [src/config.js](src/config.js), updated the setup-page copy in [src/server.js](src/server.js), and adjusted [opencomputer-dx-notes.md](opencomputer-dx-notes.md) so active notes and docs point at Fly only. Historical Render mentions remain only in this chronological conversation log.
