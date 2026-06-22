@@ -195,3 +195,7 @@ I confirmed that I would expect SDK surface changes: at minimum `metadata?: Reco
 > User: "ok we forgot to update the sdk - now fixed - anything would change in the examples with this in mind?"
 
 I upgraded the repo to `@opencomputer/sdk@0.7.2`, confirmed the new declarations include `CreateSessionParams.metadata` and `SessionData.metadata`, and simplified [src/review.ts](src/review.ts) by removing the temporary session-create intersection type and `session.snapshot.metadata` cast. I also updated [README.md](README.md), [opencomputer-dx-notes.md](opencomputer-dx-notes.md), and [opencomputer-api-sdk-requirements.md](opencomputer-api-sdk-requirements.md) to say the basic SDK metadata surface is now typed.
+
+> User: "i wonder what actually in the current code requires an always-on container? wouldn't we be better off deploying to smth lightweight / serverless to demonstrate the point that this is almost frontend, no backend complexity? or is there smth that genuinely requires an always-on app?"
+
+I reviewed the current request flow and identified that the app no longer needs an always-on container for state, polling, or local storage. The remaining always-on assumption is the use of `setImmediate(...)` after returning `202` to GitHub; that deferred pre-session work needs a live process or a serverless background primitive such as `waitUntil`. A serverless deployment would better demonstrate that OpenComputer owns the durable background-agent work, while the app only handles webhooks and GitHub API calls.
