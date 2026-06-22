@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "bootstrap:agent": "tsx scripts/bootstrap-opencomputer-agent.ts",
     "start": "node dist/src/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "node --import tsx --test test/*.test.ts",

@@ -64,12 +64,12 @@ The app has four responsibilities:
 
 1. Accept a GitHub webhook and return quickly.
 2. Fetch the PR metadata, changed files, and diff.
-3. Start an OpenComputer Durable Agent Session with that PR context.
-4. Update one sticky PR comment as the review moves from queued to done.
+3. Start an OpenComputer Durable Agent Session with that PR context and a completion callback.
+4. Let the OpenComputer callback update one sticky PR comment when the session finishes.
 
 Automatic reviews run on `pull_request.opened`, `reopened`, `synchronize`, and `ready_for_review`. Manual reviews run from PR comments starting with `/oc-review`. Draft PRs are ignored unless `REVIEW_DRAFT_PRS=true`.
 
-The key OpenComputer part is small. The real code is in [src/review.ts](src/review.ts).
+Bootstrap the OpenComputer agent once, then set `OPENCOMPUTER_AGENT_ID` in the deployed app. The script is [scripts/bootstrap-opencomputer-agent.ts](scripts/bootstrap-opencomputer-agent.ts).
 
 ```ts
 import { OpenComputer } from "@opencomputer/sdk";
@@ -78,7 +78,7 @@ const oc = new OpenComputer({
   apiKey: process.env.OPENCOMPUTER_API_KEY!,
 });
 
-const agent = await oc.agents.create({
+const agent = existingAgent || await oc.agents.create({
   name: "opencomputer-pr-reviewer",
   runtime: "claude",
   model: "anthropic/claude-opus-4-8",
@@ -86,31 +86,43 @@ const agent = await oc.agents.create({
   key: process.env.ANTHROPIC_API_KEY,
   limits: { turns: 1, turnSeconds: 600 },
 });
+```
 
+At runtime, each PR starts a durable session against that existing agent. The real code is in [src/review.ts](src/review.ts).
+
+```ts
 const session = await oc.sessions.create({
-  agent: agent.id,
+  agent: process.env.OPENCOMPUTER_AGENT_ID!,
   input: buildReviewTask({ repository, pullRequest, files, diff }),
   key: `github:${repo}:pull:${number}:sha:${headSha}`,
   idempotencyKey: githubDeliveryId,
+  destinations: [{
+    url: `${PUBLIC_URL}/webhooks/opencomputer?token=${token}`,
+    types: ["turn.completed"],
+    level: "user",
+  }],
 });
+
+await saveReviewState({ sessionId: session.id, repository, pullRequest });
 ```
 
-Then poll the durable session result and post it back to GitHub:
+When OpenComputer calls back, fetch the durable result and post it to GitHub:
 
 ```ts
-while (true) {
-  const result = await session.result();
-  if (result.lastTurn?.yieldReason) {
-    await github.upsertStickyIssueComment({
-      issueNumber: pullRequest.number,
-      marker: "<!-- opencomputer-pr-review -->",
-      body: markdownFrom(result),
-    });
-    break;
-  }
+app.post("/webhooks/opencomputer", async (c) => {
+  verifyCallbackToken(c.req.query("token"));
 
-  await sleep(5000);
-}
+  const { sessionId } = await c.req.json();
+  const state = await getReviewState(sessionId);
+  const session = await oc.sessions.get(sessionId);
+  const result = await session.result();
+
+  await github.upsertStickyIssueComment({
+    issueNumber: state.pullRequest.number,
+    marker: "<!-- opencomputer-pr-review -->",
+    body: markdownFrom(result),
+  });
+});
 ```
 
 The webhook route is just normal app plumbing: verify GitHub, hand work to the review service, and return `202`. See [src/app.ts](src/app.ts).
@@ -136,6 +148,7 @@ The rest is provider-specific glue:
 
 - [src/github.ts](src/github.ts) signs GitHub App JWTs, fetches PR data, and writes comments.
 - [src/prompts.ts](src/prompts.ts) turns GitHub PR context into the agent task.
+- [src/store.ts](src/store.ts) stores the session-to-PR mapping used by the OpenComputer callback.
 - [src/server.ts](src/server.ts) wires config, Hono, GitHub, and OpenComputer together.
 
 ## Configure
@@ -146,6 +159,8 @@ Required environment variables:
 - `GITHUB_PRIVATE_KEY` or `GITHUB_PRIVATE_KEY_BASE64`
 - `GITHUB_WEBHOOK_SECRET`
 - `OPENCOMPUTER_API_KEY`
+- `OPENCOMPUTER_AGENT_ID`
+- `OPENCOMPUTER_WEBHOOK_TOKEN`
 
 Common optional values:
 
@@ -167,6 +182,7 @@ The service can boot before all secrets are configured. In that state `/healthz`
 ```bash
 cp .env.example .env
 npm install
+npm run bootstrap:agent
 npm test
 npm run build
 npm start
@@ -195,6 +211,8 @@ flyctl secrets set \
   GITHUB_PRIVATE_KEY_BASE64=... \
   GITHUB_WEBHOOK_SECRET=... \
   OPENCOMPUTER_API_KEY=... \
+  OPENCOMPUTER_AGENT_ID=... \
+  OPENCOMPUTER_WEBHOOK_TOKEN=... \
   ANTHROPIC_API_KEY=...
 ```
 
@@ -214,7 +232,7 @@ GitHub redirects back with a temporary manifest code. Exchange it within one hou
 
 ## Production Notes
 
-- OpenComputer sessions are durable, but this prototype starts review work in-process after returning HTTP 202. A production version should use a durable queue and/or OpenComputer completion webhooks.
+- OpenComputer session execution is durable and completion is callback-driven. This prototype stores the session-to-PR mapping on local disk; a production version should use a durable database.
 - `data/reviews.jsonl` is local process/container state, not a durable audit log.
 - The review output is currently one Markdown PR comment. Checks annotations and line comments are future improvements.
 - The app sends PR diffs as task input. A richer version could give the OpenComputer runtime repository access.

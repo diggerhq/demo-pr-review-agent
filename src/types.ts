@@ -20,6 +20,8 @@ export interface AppConfig {
     baseUrl: string;
     agentId: string;
     agentName: string;
+    webhookPath: string;
+    webhookToken: string;
     credentialId: string;
     anthropicKey: string;
     model: string;
@@ -103,3 +105,11 @@ export interface Runtime {
 }
 
 export type OpenComputerSession = Session;
+
+export interface ReviewState {
+  sessionId: string;
+  installationId: number;
+  repository: GitHubRepository;
+  pullRequest: GitHubPullRequest;
+  trigger: string;
+}

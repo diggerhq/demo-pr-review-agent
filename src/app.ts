@@ -89,6 +89,16 @@ export function createApp({ config, reviewService }: { config: AppConfig; review
     return c.json({ ok: true, ...result }, result.accepted ? 202 : 200);
   });
 
+  app.post(config.openComputer.webhookPath, async (c) => {
+    if (config.openComputer.webhookToken && c.req.query("token") !== config.openComputer.webhookToken) {
+      return c.json({ ok: false, error: "invalid token" }, 401);
+    }
+
+    const payload = await c.req.json();
+    const result = await reviewService.handleOpenComputerWebhook(payload);
+    return c.json({ ok: true, ...result }, result.accepted ? 202 : 200);
+  });
+
   app.notFound((c) => c.json({ ok: false, error: "not found" }, 404));
 
   app.onError((error, c) => {

@@ -1,10 +1,9 @@
-import type { CreateAgentParams, Session } from "@opencomputer/sdk";
+import type { Session } from "@opencomputer/sdk";
 import { REVIEW_AGENT_PROMPT, buildReviewTask, limitCommentBody } from "./prompts.js";
 import type {
   GitHubPullRequest,
   GitHubRepository,
   GitHubWebhookPayload,
-  OpenComputerSession,
   ReviewServiceDeps,
 } from "./types.js";
 
@@ -48,12 +47,6 @@ interface CommentContext {
   pullRequest: GitHubPullRequest;
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 function errorRecord(error: unknown): Record<string, unknown> {
   if (!(error instanceof Error)) {
     return { message: String(error) };
@@ -85,6 +78,63 @@ function shortSha(sha = ""): string {
 
 function sessionKey(repository: GitHubRepository, pullRequest: GitHubPullRequest): string {
   return `github:${repository.full_name}:pull:${pullRequest.number}:sha:${pullRequest.head?.sha}`;
+}
+
+function openComputerCallbackUrl(config: ReviewServiceDeps["config"]): string {
+  const url = new URL(config.openComputer.webhookPath, `${config.publicUrl}/`);
+  url.searchParams.set("token", config.openComputer.webhookToken);
+  return url.toString();
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function sessionIdFromWebhook(payload: unknown): string {
+  const root = objectValue(payload);
+  const event = objectValue(root.event);
+  const data = objectValue(root.data);
+  const session = objectValue(root.session);
+
+  const candidates = [
+    root.session,
+    root.sessionId,
+    root.session_id,
+    event.session,
+    event.sessionId,
+    event.session_id,
+    data.session,
+    data.sessionId,
+    data.session_id,
+    session.id,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      return candidate;
+    }
+
+    const nested = objectValue(candidate);
+    if (typeof nested.id === "string") {
+      return nested.id;
+    }
+  }
+
+  return "";
+}
+
+function eventTypeFromWebhook(payload: unknown): string {
+  const root = objectValue(payload);
+  const event = objectValue(root.event);
+  const data = objectValue(root.data);
+
+  for (const candidate of [root.type, event.type, data.type]) {
+    if (typeof candidate === "string") {
+      return candidate;
+    }
+  }
+
+  return "";
 }
 
 export function parseReviewCommand(body: string, commandPrefix: string): ReviewCommand {
@@ -231,14 +281,11 @@ export class ReviewService {
   github: ReviewServiceDeps["github"];
   openComputer: ReviewServiceDeps["openComputer"];
   store: ReviewServiceDeps["store"];
-  agentId: string;
-
   constructor({ config, github, openComputer, store }: ReviewServiceDeps) {
     this.config = config;
     this.github = github;
     this.openComputer = openComputer;
     this.store = store;
-    this.agentId = config.openComputer.agentId;
   }
 
   handleWebhook({ event, delivery, payload }: WebhookContext): { accepted: boolean; reason: string } {
@@ -355,49 +402,6 @@ export class ReviewService {
     });
   }
 
-  async ensureOpenComputerAgent(): Promise<string> {
-    if (this.agentId) {
-      return this.agentId;
-    }
-
-    const params: CreateAgentParams = {
-      name: this.config.openComputer.agentName,
-      runtime: "claude",
-      model: this.config.openComputer.model,
-      prompt: REVIEW_AGENT_PROMPT,
-      limits: this.config.openComputer.limits,
-    };
-
-    if (this.config.openComputer.credentialId) {
-      params.credential = this.config.openComputer.credentialId;
-    } else if (this.config.openComputer.anthropicKey) {
-      params.key = this.config.openComputer.anthropicKey;
-    }
-
-    const agent = await this.openComputer.agents.create(params);
-    this.agentId = agent.id;
-    return agent.id;
-  }
-
-  async waitForSessionResult(session: OpenComputerSession): Promise<SessionResult> {
-    const deadline = Date.now() + this.config.review.waitTimeoutMs;
-    let lastResult: SessionResult | null = null;
-
-    while (Date.now() < deadline) {
-      lastResult = await session.result();
-      if (lastResult?.lastTurn?.yieldReason) {
-        return lastResult;
-      }
-      await sleep(this.config.review.pollIntervalMs);
-    }
-
-    const error = new Error(`Timed out waiting for OpenComputer session ${session.id}`) as Error & {
-      lastResult?: SessionResult | null;
-    };
-    error.lastResult = lastResult;
-    throw error;
-  }
-
   async reviewPullRequest({
     delivery,
     installationId,
@@ -482,7 +486,7 @@ export class ReviewService {
         repository: repository.full_name,
         pullNumber,
       });
-      const agentId = await this.ensureOpenComputerAgent();
+      const agentId = this.config.openComputer.agentId;
       const input = buildReviewTask({
         repository,
         pullRequest,
@@ -503,8 +507,27 @@ export class ReviewService {
         key: sessionKey(repository, pullRequest),
         limits: this.config.openComputer.limits,
         idempotencyKey: delivery,
+        destinations: [
+          {
+            url: openComputerCallbackUrl(this.config),
+            level: "user",
+            types: ["turn.completed"],
+            includeRaw: false,
+            enabled: true,
+          },
+        ],
       });
       const sessionId = session.id;
+      if (!installationId) {
+        throw new Error("GitHub webhook payload did not include an installation id");
+      }
+      await this.store.saveReviewState({
+        sessionId,
+        installationId,
+        repository,
+        pullRequest,
+        trigger,
+      });
       console.info("review opencomputer session created", {
         delivery,
         repository: repository.full_name,
@@ -521,47 +544,19 @@ export class ReviewService {
         body: runningComment({ repository, pullRequest, sessionId, trigger }),
       });
 
-      console.info("review waiting for opencomputer result", {
-        delivery,
-        repository: repository.full_name,
-        pullNumber,
-        sessionId,
-      });
-      const result = await this.waitForSessionResult(session);
-      const yieldReason = result.lastTurn?.yieldReason || "unknown";
-      const markdown = resultText(result);
-
-      await this.github.upsertStickyIssueComment({
-        token,
-        owner,
-        repo,
-        issueNumber: pullNumber,
-        marker: REVIEW_COMMENT_MARKER,
-        body: finalComment({
-          repository,
-          pullRequest,
-          sessionId,
-          yieldReason,
-          markdown,
-          maxChars: this.config.review.commentMaxChars,
-        }),
-      });
-
       await this.store.append({
-        event: "review.completed",
+        event: "review.session_created",
         delivery,
         repository: repository.full_name,
         pullNumber,
         headSha: pullRequest.head?.sha,
         sessionId,
-        yieldReason,
       });
-      console.info("review completed", {
+      console.info("review waiting for opencomputer webhook", {
         delivery,
         repository: repository.full_name,
         pullNumber,
         sessionId,
-        yieldReason,
       });
     } catch (error) {
       console.error("review failed", {
@@ -596,5 +591,75 @@ export class ReviewService {
         });
       }
     }
+  }
+
+  async handleOpenComputerWebhook(payload: unknown): Promise<{ accepted: boolean; reason: string }> {
+    const sessionId = sessionIdFromWebhook(payload);
+    const eventType = eventTypeFromWebhook(payload);
+
+    console.info("received opencomputer webhook", { sessionId, eventType });
+
+    if (!sessionId) {
+      return { accepted: false, reason: "ignored OpenComputer webhook without session id" };
+    }
+
+    if (eventType && eventType !== "turn.completed") {
+      return { accepted: false, reason: `ignored OpenComputer event ${eventType}` };
+    }
+
+    return this.completeReviewFromSession(sessionId);
+  }
+
+  async completeReviewFromSession(sessionId: string): Promise<{ accepted: boolean; reason: string }> {
+    const state = await this.store.getReviewState(sessionId);
+    if (!state) {
+      return { accepted: false, reason: `ignored unknown OpenComputer session ${sessionId}` };
+    }
+
+    const session = await this.openComputer.sessions.get(sessionId);
+    const result = await session.result();
+    const yieldReason = result.lastTurn?.yieldReason;
+    if (!yieldReason) {
+      return { accepted: true, reason: `OpenComputer session ${sessionId} is not complete yet` };
+    }
+
+    const token = await this.github.installationToken(state.installationId);
+    const owner = state.repository.owner.login;
+    const repo = state.repository.name;
+    const pullNumber = state.pullRequest.number;
+    const markdown = resultText(result);
+
+    await this.github.upsertStickyIssueComment({
+      token,
+      owner,
+      repo,
+      issueNumber: pullNumber,
+      marker: REVIEW_COMMENT_MARKER,
+      body: finalComment({
+        repository: state.repository,
+        pullRequest: state.pullRequest,
+        sessionId,
+        yieldReason,
+        markdown,
+        maxChars: this.config.review.commentMaxChars,
+      }),
+    });
+
+    await this.store.append({
+      event: "review.completed",
+      repository: state.repository.full_name,
+      pullNumber,
+      headSha: state.pullRequest.head?.sha,
+      sessionId,
+      yieldReason,
+    });
+    console.info("review completed from opencomputer webhook", {
+      repository: state.repository.full_name,
+      pullNumber,
+      sessionId,
+      yieldReason,
+    });
+
+    return { accepted: true, reason: "completed pull request review" };
   }
 }

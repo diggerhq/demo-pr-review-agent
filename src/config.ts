@@ -56,6 +56,8 @@ export function loadConfig(env: Env = process.env): AppConfig {
       baseUrl: (env.OPENCOMPUTER_BASE_URL || "https://api.opencomputer.dev/v3").replace(/\/$/, ""),
       agentId: env.OPENCOMPUTER_AGENT_ID || "",
       agentName: env.OPENCOMPUTER_AGENT_NAME || "opencomputer-pr-reviewer",
+      webhookPath: env.OPENCOMPUTER_WEBHOOK_PATH || "/webhooks/opencomputer",
+      webhookToken: env.OPENCOMPUTER_WEBHOOK_TOKEN || "",
       credentialId: env.OPENCOMPUTER_CREDENTIAL_ID || "",
       anthropicKey: env.ANTHROPIC_API_KEY || "",
       model: env.OPENCOMPUTER_AGENT_MODEL || "anthropic/claude-opus-4-8",
@@ -84,6 +86,9 @@ export function missingRequiredConfig(config: AppConfig): string[] {
   if (!config.github.privateKey) missing.push("GITHUB_PRIVATE_KEY or GITHUB_PRIVATE_KEY_BASE64");
   if (!config.github.webhookSecret) missing.push("GITHUB_WEBHOOK_SECRET");
   if (!config.openComputer.apiKey) missing.push("OPENCOMPUTER_API_KEY");
+  if (!config.openComputer.agentId) missing.push("OPENCOMPUTER_AGENT_ID");
+  if (!config.publicUrl) missing.push("PUBLIC_URL");
+  if (!config.openComputer.webhookToken) missing.push("OPENCOMPUTER_WEBHOOK_TOKEN");
 
   return missing;
 }
