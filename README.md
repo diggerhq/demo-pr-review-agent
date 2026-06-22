@@ -121,6 +121,13 @@ Set all required secrets in the host dashboard, then configure the GitHub App we
 - The sticky PR comment contains the OpenComputer session ID but not the session client token.
 - The review comment is intentionally Markdown-only for now. Checks annotations and line comments are future improvements.
 
+## Verification
+
+Current local checks for implementation checkpoint [`2ba71a3`](https://github.com/diggerhq/test-durable-0/commit/2ba71a3):
+
+- `npm test`: 7 passing tests.
+- `npm run lint`: Node syntax checks passed.
+
 ## Tracking Docs
 
 - [conversation-history.md](conversation-history.md) records user prompts and assistant response summaries.
