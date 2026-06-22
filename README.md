@@ -253,6 +253,8 @@ Current deployment checks:
 - `/` returns HTTP 200.
 - `/healthz` returns HTTP 200 with `configured: true`.
 - `/setup/github-app/manifest` returns the expected GitHub App manifest.
+- PR #1 demo review completed successfully: `https://github.com/diggerhq/test-durable-0/pull/1`
+- Demo OpenComputer session: `ses_8ab1c4c27a494fd2a5770365`
 
 Secrets are present in Fly and in local `.env` for development. `.env` is ignored by git and must remain untracked.
 

@@ -115,3 +115,7 @@ After deploying the progress-comment change, I attempted to trigger `/oc-review`
 > User: "i bumped some permissions also in the app just in case, could recheck"
 
 I rechecked the GitHub App registration and the `diggerhq/test-durable-0` installation. The App registration now has `pull_requests: write`, but the installed org copy still has `pull_requests: read`, and a permission probe still gets `403 Resource not accessible by integration`. The required approval/update link from GitHub is `https://github.com/organizations/diggerhq/settings/installations/141975477`.
+
+> User: "ah i forgot to reinstall accept permissions. done now"
+
+I rechecked the installation permissions and confirmed `pull_requests: write` was now present on the installation token. I redelivered the original `/oc-review` webhook delivery `3827158249558245376`; GitHub accepted the redelivery with `202`. The deployed app posted a sticky `OpenComputer PR Review` comment on PR #1 and updated it with a completed review from OpenComputer session `ses_8ab1c4c27a494fd2a5770365`.
