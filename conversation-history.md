@@ -135,3 +135,7 @@ I rewrote [README.md](README.md) to be shorter and more human-facing, with live 
 > User: "also render is no longer used I believe? check throughout the repo"
 
 I searched the repo for Render references, removed the unused `render.yaml` blueprint, removed the `RENDER_EXTERNAL_URL` fallback from [src/config.js](src/config.js), updated the setup-page copy in [src/server.js](src/server.js), and adjusted [opencomputer-dx-notes.md](opencomputer-dx-notes.md) so active notes and docs point at Fly only. Historical Render mentions remain only in this chronological conversation log.
+
+> User: "why aren't we using OpenComputer SDK but raw api calls instead? is there a reason? genuinely curious"
+
+I explained that raw REST was a pragmatic prototype choice: the integration only needs agent creation, session creation, result polling, and event content reads, so [src/opencomputer.js](src/opencomputer.js) stays small and avoids adding dependencies while the API shape is still being explored. I also noted that switching to the SDK would make sense if it provides maintained types, retries, pagination helpers, streaming/event abstractions, or cleaner credential/session handling.
