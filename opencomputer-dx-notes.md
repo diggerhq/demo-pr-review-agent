@@ -24,3 +24,8 @@ Observations from building a PR-review GitHub App against the Durable Agent Sess
 - Should session `key` be unique per PR head SHA, per PR number, or per GitHub delivery? The get-or-create behavior is powerful, but common application-level keying patterns would help.
 - Is there a recommended maximum input size for a session task body? PR diffs need truncation, and the practical limits are not obvious from the first docs pass.
 - Are there planned event types for code review findings or diffs that a GitHub App could map directly to PR comments or Checks annotations?
+
+## Notes From Implementation
+
+- The PR reviewer currently uses in-process polling of `GET /sessions/:id/result` after the GitHub webhook returns. This proves the integration, but a production deployment should probably use a queue plus OpenComputer destinations/webhooks so completion survives process restarts.
+- The app sends PR metadata and a truncated unified diff as the session input instead of giving the OpenComputer runtime direct repository access. Workspaces or a documented "review this GitHub PR" example could make the richer version easier.

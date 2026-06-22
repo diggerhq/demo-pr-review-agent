@@ -1,0 +1,16 @@
+{
+  "name": "opencomputer-pr-review-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A GitHub App webhook service that reviews pull requests with OpenComputer Durable Agent Sessions.",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "lint": "node --check src/*.js test/*.js"
+  }
+}

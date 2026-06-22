@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: opencomputer-pr-review-agent
+    runtime: node
+    plan: starter
+    buildCommand: ""
+    startCommand: "npm start"
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
